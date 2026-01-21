@@ -1,55 +1,42 @@
 <!DOCTYPE html>
-<html style="margin:0; padding:0; height:100%;">
+<html>
 <head>
-    <title>FCCLA Order of Worship</title>
+    <title>Opening Latest PDF...</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #666; }
+    </style>
 </head>
-<body style="margin:0; padding:0; height:100%; overflow:hidden;">
-    <embed src="latest.pdf" type="application/pdf" width="100%" height="100%" />
-</body>
-</html<!DOCTYPE html>
-<html style="margin:0; padding:0; height:100%;">
-<head>
-    <title>Loading Latest PDF...</title>
-</head>
-<body style="margin:0; padding:0; height:100%; overflow:hidden;">
-
-    <div id="status" style="font-family: sans-serif; padding: 20px;">Locating newest PDF...</div>
+<body>
+    <div>Loading latest report...</div>
 
     <script>
-        // 1. Replace with your actual GitHub Username and Repo Name
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
 
-        async function loadLatestPDF() {
+        async function redirectToLatestPDF() {
             try {
-                // Fetch the list of files in the repo via GitHub API
                 const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/`);
                 const files = await response.json();
 
-                // Find the first file that ends with .pdf
+                // Find the first file ending in .pdf
                 const pdfFile = files.find(file => file.name.toLowerCase().endsWith('.pdf'));
 
                 if (pdfFile) {
-                    // Create an embed element to show the PDF full screen
-                    const embed = document.createElement('embed');
-                    embed.src = pdfFile.download_url;
-                    embed.type = 'application/pdf';
-                    embed.style.width = '100%';
-                    embed.style.height = '100%';
-                    
-                    // Clear the "loading" text and add the PDF
-                    document.body.innerHTML = '';
-                    document.body.appendChild(embed);
+                    // This is the magic part: 
+                    // We redirect the browser directly to the GitHub Pages version of the file.
+                    // This ensures Safari treats it as a native PDF.
+                    const pdfUrl = `https://${USER}.github.io/${REPO}/${pdfFile.name}`;
+                    window.location.replace(pdfUrl);
                 } else {
-                    document.getElementById('status').innerText = 'No PDF file found in the repository.';
+                    document.body.innerText = 'No PDF file found.';
                 }
             } catch (error) {
-                document.getElementById('status').innerText = 'Error loading PDF. Please try again later.';
+                document.body.innerText = 'Error loading PDF.';
                 console.error(error);
             }
         }
 
-        loadLatestPDF();
+        redirectToLatestPDF();
     </script>
 </body>
 </html>
