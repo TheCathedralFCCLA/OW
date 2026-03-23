@@ -7,7 +7,7 @@
     </style>
 </head>
 <body>
-    <!-- <div>Loading latest report...</div> -->
+    <div>Locating the most recent report...</div>
 
     <script>
         const USER = 'TheCathedralFCCLA';
@@ -15,17 +15,24 @@
 
         async function redirectToLatestPDF() {
             try {
+                // We fetch the contents of the repo
                 const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/`);
                 const files = await response.json();
 
-                // Find the first file ending in .pdf
-                const pdfFile = files.find(file => file.name.toLowerCase().endsWith('.pdf'));
+                // 1. Filter for only PDF files
+                // 2. Sort them. By default, GitHub returns them alphabetically.
+                // If your files are named by date (e.g. 2024.pdf, 2023.pdf), 
+                // .sort().reverse() will put the newest at the top.
+                const pdfFiles = files
+                    .filter(file => file.name.toLowerCase().endsWith('.pdf'))
+                    .sort((a, b) => b.name.localeCompare(a.name)); 
 
-                if (pdfFile) {
-                    // This is the magic part: 
-                    // We redirect the browser directly to the GitHub Pages version of the file.
-                    // This ensures Safari treats it as a native PDF.
-                    const pdfUrl = `https://${USER}.github.io/${REPO}/${pdfFile.name}`;
+                if (pdfFiles.length > 0) {
+                    // Pick the first one after sorting
+                    const latestPdf = pdfFiles[0];
+                    
+                    // Redirect to the GitHub Pages URL
+                    const pdfUrl = `https://${USER}.github.io/${REPO}/${latestPdf.name}`;
                     window.location.replace(pdfUrl);
                 } else {
                     document.body.innerText = 'No PDF file found.';
