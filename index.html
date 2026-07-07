@@ -23,19 +23,17 @@
         const REPO = 'OW';
         const SUBFOLDER = 'OWs'; 
 
-        // Strictly extracts and verifies if a date slug is present in the URL
         function getTargetFilenameFromPath() {
             const path = window.location.pathname;
             const segments = path.split('/').filter(Boolean);
             
-            // Strip out repo name and subfolder name to isolate potential date slug
             const filteredSegments = segments.filter(seg => {
                 const lower = seg.toLowerCase();
                 return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
             });
 
             if (filteredSegments.length === 0) {
-                return null; // Root URL visited, no date requested
+                return null; 
             }
 
             const dateSlug = filteredSegments[0];
@@ -53,7 +51,7 @@
                 
                 return `${month}.${day}.${year} ow.pdf`;
             }
-            return null; // A slug exists, but it isn't a valid date format
+            return null; 
         }
 
         function sortFilesChronologically(pdfFiles) {
@@ -78,11 +76,14 @@
         async function handleRedirect() {
             const statusDiv = document.getElementById('status');
             const targetFilename = getTargetFilenameFromPath();
+            
+            // Generates a unique string based on the exact millisecond (e.g., ?cb=1719945600000)
+            const cacheBuster = `?cb=${new Date().getTime()}`;
 
             try {
-                // FORCE CASE 1: If a valid date string was explicitly in the URL, search ONLY the /OWs folder
+                // CASE 1: Specific date slug provided -> Search inside /OWs
                 if (targetFilename) {
-                    const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`);
+                    const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                     const files = await response.json();
 
                     if (Array.isArray(files)) {
@@ -90,19 +91,18 @@
                         const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename);
                         
                         if (matchedFile) {
-                            const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
+                            const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}${cacheBuster}`;
                             window.location.replace(pdfUrl);
                             return;
                         }
                     }
                     
-                    // If explicit date wasn't found, let it inform user before pulling the root fallback
                     statusDiv.innerText = 'Requested date PDF not found. Checking main folder...';
-                    await new Promise(resolve => setTimeout(resolve, 1200));
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
 
-                // FORCE CASE 2: No valid date requested (Root URL /) -> Check Root folder directly
-                const rootResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/`);
+                // CASE 2: Root URL visited -> Search directly in Root
+                const rootResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents${cacheBuster}`);
                 const rootFiles = await rootResponse.json();
 
                 if (Array.isArray(rootFiles)) {
@@ -111,14 +111,14 @@
                     if (rootPdfs.length > 0) {
                         sortFilesChronologically(rootPdfs);
                         const mainPdf = rootPdfs[0];
-                        const pdfUrl = `https://${USER}.github.io/${REPO}/${mainPdf.name}`;
+                        const pdfUrl = `https://${USER}.github.io/${REPO}/${mainPdf.name}${cacheBuster}`;
                         window.location.replace(pdfUrl);
                         return;
                     }
                 }
 
-                // FORCE CASE 3: Absolute backup fallback if root is totally empty of PDFs
-                const backupResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`);
+                // CASE 3: Backup Fallback -> Use /OWs folder newest file
+                const backupResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                 const backupFiles = await backupResponse.json();
                 
                 if (Array.isArray(backupFiles)) {
@@ -126,7 +126,7 @@
                     if (backupPdfs.length > 0) {
                         sortFilesChronologically(backupPdfs);
                         const latestPdf = backupPdfs[0];
-                        const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${latestPdf.name}`;
+                        const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${latestPdf.name}${cacheBuster}`;
                         window.location.replace(pdfUrl);
                         return;
                     }
