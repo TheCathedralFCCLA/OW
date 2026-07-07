@@ -23,19 +23,24 @@
         const REPO = 'OW';
         const SUBFOLDER = 'OWs'; 
 
-        // Helper to parse date from URL path
+        // Strictly extracts and verifies if a date slug is present in the URL
         function getTargetFilenameFromPath() {
             const path = window.location.pathname;
             const segments = path.split('/').filter(Boolean);
             
+            // Strip out repo name and subfolder name to isolate potential date slug
             const filteredSegments = segments.filter(seg => {
                 const lower = seg.toLowerCase();
                 return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
             });
 
+            if (filteredSegments.length === 0) {
+                return null; // Root URL visited, no date requested
+            }
+
             const dateSlug = filteredSegments[0];
             const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/;
-            const match = dateSlug ? dateSlug.match(dateRegex) : null;
+            const match = dateSlug.match(dateRegex);
 
             if (match) {
                 let [_, month, day, year] = match;
@@ -48,10 +53,9 @@
                 
                 return `${month}.${day}.${year} ow.pdf`;
             }
-            return null;
+            return null; // A slug exists, but it isn't a valid date format
         }
 
-        // Custom sorting helper for date-named PDFs
         function sortFilesChronologically(pdfFiles) {
             pdfFiles.sort((a, b) => {
                 const parseDateParts = (name) => {
@@ -76,7 +80,7 @@
             const targetFilename = getTargetFilenameFromPath();
 
             try {
-                // CASE 1: A specific date link was requested (e.g., /6-28-2026) -> Look in /OWs folder
+                // FORCE CASE 1: If a valid date string was explicitly in the URL, search ONLY the /OWs folder
                 if (targetFilename) {
                     const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`);
                     const files = await response.json();
@@ -92,12 +96,12 @@
                         }
                     }
                     
-                    // If requested date isn't found, let it drop through to the root behavior below
-                    statusDiv.innerText = 'Requested date PDF not found. Checking for the main edition...';
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    // If explicit date wasn't found, let it inform user before pulling the root fallback
+                    statusDiv.innerText = 'Requested date PDF not found. Checking main folder...';
+                    await new Promise(resolve => setTimeout(resolve, 1200));
                 }
 
-                // CASE 2: No specific date requested (Root URL /) -> Look in Main Repository Root
+                // FORCE CASE 2: No valid date requested (Root URL /) -> Check Root folder directly
                 const rootResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/`);
                 const rootFiles = await rootResponse.json();
 
@@ -105,7 +109,6 @@
                     const rootPdfs = rootFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
 
                     if (rootPdfs.length > 0) {
-                        // Sort if there are multiple, or just grab the main PDF residing in the root
                         sortFilesChronologically(rootPdfs);
                         const mainPdf = rootPdfs[0];
                         const pdfUrl = `https://${USER}.github.io/${REPO}/${mainPdf.name}`;
@@ -114,7 +117,7 @@
                     }
                 }
 
-                // CASE 3: Absolute fallback if root directory has no PDFs -> Find latest in /OWs folder
+                // FORCE CASE 3: Absolute backup fallback if root is totally empty of PDFs
                 const backupResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`);
                 const backupFiles = await backupResponse.json();
                 
