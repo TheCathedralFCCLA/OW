@@ -1,35 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Opening OW PDF...</title>
+    <title>OW Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            color: #666; 
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             background-color: #f9f9f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+        #status-bar {
+            padding: 12px;
+            background: #fff;
+            border-bottom: 1px solid #eee;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        iframe {
+            width: 100%;
+            flex-grow: 1;
+            border: none;
+            margin: 0;
+            padding: 0;
+        }
+        .error-state {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #888;
         }
     </style>
 </head>
 <body>
-    <div id="status">Opening OW...</div>
+    <div class="container">
+        <div id="status-bar">Loading OW Document Viewer...</div>
+        <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
+    </div>
 
     <script>
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
-        const SUBFOLDER = 'OWs'; 
+        const SUBFOLDER = 'OWs';
 
+        // Extracts date pattern from either the Squarespace wrapper URL or direct GitHub pages execution
         function getTargetFilenameFromPath() {
             const path = window.location.pathname;
             const segments = path.split('/').filter(Boolean);
             
+            // Filters out known static URL segments so they aren't mistaken for dates
             const filteredSegments = segments.filter(seg => {
                 const lower = seg.toLowerCase();
-                return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
+                return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase() && lower !== 'ow';
             });
 
             if (filteredSegments.length === 0) {
@@ -73,15 +106,14 @@
             });
         }
 
-        async function handleRedirect() {
-            const statusDiv = document.getElementById('status');
+        async function loadViewer() {
+            const statusBar = document.getElementById('status-bar');
+            const viewerFrame = document.getElementById('ow-viewer');
             const targetFilename = getTargetFilenameFromPath();
-            
-            // Keeps API lookups perfectly fresh without changing user-facing URLs
             const cacheBuster = `?cb=${new Date().getTime()}`;
 
             try {
-                // CASE 1: Date URL requested (e.g., /OW/6-28-26) -> Loads specific target from /OWs folder seamlessly
+                // CASE 1: Date string found in active browser path -> Pull from /OWs subfolder
                 if (targetFilename) {
                     const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                     const files = await response.json();
@@ -91,17 +123,16 @@
                         const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename);
                         
                         if (matchedFile) {
-                            const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
-                            window.location.replace(pdfUrl);
+                            statusBar.style.display = 'none'; // Clean transition
+                            viewerFrame.src = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
                             return;
                         }
                     }
-                    
-                    statusDiv.innerText = 'Requested date PDF not found. Checking main folder...';
+                    statusBar.innerText = 'Requested date PDF not found. Fetching main directory...';
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
 
-                // CASE 2: Root URL visited (e.g., /OW/) -> Loads the main PDF file from the root repository directory
+                // CASE 2: Base layout page path loaded -> Grab primary document layout from Root Folder
                 const rootResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents${cacheBuster}`);
                 const rootFiles = await rootResponse.json();
 
@@ -110,14 +141,13 @@
 
                     if (rootPdfs.length > 0) {
                         sortFilesChronologically(rootPdfs);
-                        const mainPdf = rootPdfs[0];
-                        const pdfUrl = `https://${USER}.github.io/${REPO}/${mainPdf.name}`;
-                        window.location.replace(pdfUrl);
+                        statusBar.style.display = 'none';
+                        viewerFrame.src = `https://${USER}.github.io/${REPO}/${rootPdfs[0].name}`;
                         return;
                     }
                 }
 
-                // CASE 3: Dynamic Fallback
+                // CASE 3: Backup Fallback -> Use newest document asset inside /OWs
                 const backupResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                 const backupFiles = await backupResponse.json();
                 
@@ -125,21 +155,20 @@
                     const backupPdfs = backupFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
                     if (backupPdfs.length > 0) {
                         sortFilesChronologically(backupPdfs);
-                        const latestPdf = backupPdfs[0];
-                        const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${latestPdf.name}`;
-                        window.location.replace(pdfUrl);
+                        statusBar.style.display = 'none';
+                        viewerFrame.src = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${backupPdfs[0].name}`;
                         return;
                     }
                 }
 
-                statusDiv.innerText = 'No PDF files found.';
+                statusBar.innerText = 'No documents found.';
             } catch (error) {
-                statusDiv.innerText = 'Error loading document layout.';
+                statusBar.innerText = 'Error connection payload failed.';
                 console.error(error);
             }
         }
 
-        handleRedirect();
+        loadViewer();
     </script>
 </body>
 </html>
