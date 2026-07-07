@@ -3,7 +3,16 @@
 <head>
     <title>Opening OW PDF...</title>
     <style>
-        body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #666; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            color: #666; 
+            background-color: #f9f9f9;
+        }
     </style>
 </head>
 <body>
@@ -12,28 +21,37 @@
     <script>
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
+        const SUBFOLDER = 'OWs'; // The physical folder where PDFs live
 
-        // Helper to convert URL date format "mm-dd-yyyy" to file format "MM.DD.YEAR"
+        // Translates a web link (e.g., /6-28-2026) to the file format (6.28.26 ow.pdf)
         function getTargetFilenameFromPath() {
             const path = window.location.pathname;
-            // Removes trailing slashes and splits the path
             const segments = path.split('/').filter(Boolean);
             
-            // If the URL is just the root or repo name, there's no specific date requested
-            // segments[0] might be the repo name depending on custom domain setup, adjust if needed
-            const dateSlug = segments[segments.length - 1];
+            // Remove 'ow' and 'ows' from the URL check if they are present
+            const filteredSegments = segments.filter(seg => {
+                const lower = seg.toLowerCase();
+                return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
+            });
 
-            // Validate if the slug looks like a date (e.g., 03-25-2026 or 3-25-2026)
-            const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
+            const dateSlug = filteredSegments[0];
+            // Matches 1-2 digit months/days and 2 or 4 digit years (e.g., 6-28-2026 or 06-28-26)
+            const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/;
             const match = dateSlug ? dateSlug.match(dateRegex) : null;
 
             if (match) {
-                const [_, month, day, year] = match;
-                // Pad with zeros if your files strictly use two digits, e.g., "03.25.2026 OW.pdf"
-                const formattedMonth = month.padStart(2, '0');
-                const formattedDay = day.padStart(2, '0');
+                let [_, month, day, year] = match;
                 
-                return `${formattedMonth}.${formattedDay}.${year} OW.pdf`.toLowerCase();
+                // Strip any leading zeros to match your file style (e.g., "06" becomes "6")
+                month = parseInt(month, 10).toString();
+                day = parseInt(day, 10).toString();
+                
+                // Convert 4-digit years to 2-digit years to match "26" file naming scheme
+                if (year.length === 4) {
+                    year = year.slice(-2);
+                }
+                
+                return `${month}.${day}.${year} ow.pdf`;
             }
             return null;
         }
@@ -43,49 +61,61 @@
             const targetFilename = getTargetFilenameFromPath();
 
             try {
-                // Fetch the contents of the repo
-                const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/`);
+                // Fetch all files inside the physical "OWs" subfolder via GitHub API
+                const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`);
                 const files = await response.json();
 
-                // Filter for PDF files
+                if (!Array.isArray(files)) {
+                    throw new Error("Could not parse repository contents.");
+                }
+
+                // Filter for just PDFs
                 const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
 
+                // 1. If a specific date link was requested, try to find it first
                 if (targetFilename) {
-                    // Try to find the specific requested date file
                     const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename);
                     
                     if (matchedFile) {
-                        const pdfUrl = `https://${USER}.github.io/${REPO}/${matchedFile.name}`;
+                        const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
                         window.location.replace(pdfUrl);
                         return;
                     } else {
-                        statusDiv.innerText = 'Requested date PDF not found. Redirecting to latest...';
-                        // Fallback to latest if explicit date fails after a brief pause
+                        statusDiv.innerText = 'Requested date PDF not found. Checking for the latest edition...';
+                        // Short pause so user can read status before falling back
                         await new Promise(resolve => setTimeout(resolve, 1500));
                     }
                 }
 
-                // Default behavior: Sort and pick the latest PDF
-                // NOTE: If using "MM.DD.YYYY", basic alphabetical sort won't sort by year accurately.
-                // This custom sort extracts the year first to ensure true chronological ordering.
+                // 2. Fallback / Default Behavior: Sort chronologically to find the newest PDF
+                // Handles 2-digit year configurations accurately (e.g., '26' > '25')
                 pdfFiles.sort((a, b) => {
-                    const getYear = (name) => name.split('.')[2]?.split(' ')[0] || '0000';
-                    const yearA = getYear(a.name);
-                    const yearB = getYear(b.name);
-                    
-                    if (yearA !== yearB) return yearB.localeCompare(yearA); // Newest year first
-                    return b.name.localeCompare(a.name); // Same year, fallback to alphabetical month/day
+                    const parseDateParts = (name) => {
+                        const parts = name.split(' ')[0].split('.');
+                        return {
+                            month: parseInt(parts[0], 10) || 0,
+                            day: parseInt(parts[1], 10) || 0,
+                            year: parseInt(parts[2], 10) || 0
+                        };
+                    };
+
+                    const dateA = parseDateParts(a.name);
+                    const dateB = parseDateParts(b.name);
+
+                    if (dateA.year !== dateB.year) return dateB.year - dateA.year;
+                    if (dateA.month !== dateB.month) return dateB.month - dateA.month;
+                    return dateB.day - dateA.day;
                 });
 
                 if (pdfFiles.length > 0) {
                     const latestPdf = pdfFiles[0];
-                    const pdfUrl = `https://${USER}.github.io/${REPO}/${latestPdf.name}`;
+                    const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${latestPdf.name}`;
                     window.location.replace(pdfUrl);
                 } else {
-                    statusDiv.innerText = 'No PDF files found.';
+                    statusDiv.innerText = 'No PDF files found in the OWs directory.';
                 }
             } catch (error) {
-                statusDiv.innerText = 'Error loading PDF.';
+                statusDiv.innerText = 'Error loading document layout.';
                 console.error(error);
             }
         }
