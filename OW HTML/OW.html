@@ -1,24 +1,40 @@
-<div id="ow-embed-container" style="width:100%; height:100vh; display:flex; flex-direction:column; margin:0; padding:0; overflow:hidden;">
+<div id="ow-embed-container" style="width:100%; display:flex; flex-direction:column; margin:0; padding:0; overflow:hidden;">
     
     <div id="ow-title-container" style="text-align:center; flex-shrink:0;">
         <h1>Order of Worship</h1>
         <h3 id="ow-dynamic-date">Loading Date...</h3>
     </div>
 
-    <div style="position:relative; flex-grow:1; width:100%; height:100%; min-height:0;">
+    <div id="ow-frame-wrapper" style="position:relative; width:100%; min-height:0; flex-grow:1;">
         <div id="ow-loading-status" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
             Loading OW Document Viewer...
         </div>
-        <iframe id="dynamic-ow-viewer" src="about:blank" style="width:100%; height:100%; border:none; display:none;" allowfullscreen></iframe>
+        <object id="dynamic-ow-viewer" type="application/pdf" style="width:100%; height:100%; display:none;"></object>
     </div>
 </div>
 
 <script>
     (function() {
-        const viewerFrame = document.getElementById('dynamic-ow-viewer');
+        const embedContainer = document.getElementById('ow-embed-container');
+        const frameWrapper = document.getElementById('ow-frame-wrapper');
+        const titleContainer = document.getElementById('ow-title-container');
+        const viewerObject = document.getElementById('dynamic-ow-viewer');
         const statusDiv = document.getElementById('ow-loading-status');
         const dateHeader = document.getElementById('ow-dynamic-date');
         
+        // Explicitly tells the application canvas layout how to calculate remaining layout room
+        function resizeViewer() {
+            const windowHeight = window.innerHeight;
+            const titleHeight = titleContainer.offsetHeight || 80;
+            const targetHeight = windowHeight - titleHeight - 40; 
+            
+            frameWrapper.style.height = targetHeight + 'px';
+            embedContainer.style.height = windowHeight + 'px';
+        }
+
+        resizeViewer();
+        window.addEventListener('resize', resizeViewer);
+
         function getOWCookie() {
             const name = "targetOWDate=";
             const decodedCookie = decodeURIComponent(document.cookie);
@@ -50,29 +66,30 @@
             targetUrl += savedDate;
         }
 
-        // Appending #view=Fit instructs native document parsers to adjust framing to match exactly one full page height
-        viewerFrame.src = targetUrl + '#view=Fit';
+        // Set the asset source directly using the data attribute for object compliance
+        const finalPdfPath = targetUrl + '#view=Fit';
+        viewerObject.data = finalPdfPath;
 
-        viewerFrame.onload = function() {
+        // Objects do not utilize standard iframe onload callbacks, so we track their stream mount manually
+        setTimeout(() => {
             statusDiv.style.display = 'none';
-            viewerFrame.style.display = 'block';
+            viewerObject.style.display = 'block';
+            resizeViewer();
+        }, 300);
 
-            if (!savedDate) {
-                try {
-                    const iframeUrl = (viewerFrame.contentWindow.location.href || viewerFrame.src).split('#')[0];
-                    const decodedUrl = decodeURIComponent(iframeUrl);
-                    const filenameSegment = decodedUrl.split('/').pop();
-                    const cleanDatePart = filenameSegment.split(' ')[0];
-                    
-                    if (cleanDatePart && cleanDatePart.includes('.')) {
-                        dateHeader.innerText = cleanDatePart.replace(/\./g, '/');
-                    } else {
-                        dateHeader.innerText = "Latest Edition";
-                    }
-                } catch(e) {
+        // Fallback title extractor parsing via fallback string handling
+        if (!savedDate) {
+            try {
+                const filenameSegment = targetUrl.split('/').pop() || "";
+                const cleanDatePart = filenameSegment.split(' ')[0];
+                if (cleanDatePart && cleanDatePart.includes('.')) {
+                    dateHeader.innerText = cleanDatePart.replace(/\./g, '/');
+                } else {
                     dateHeader.innerText = "Latest Edition";
                 }
+            } catch(e) {
+                dateHeader.innerText = "Latest Edition";
             }
-        };
+        }
     })();
 </script>
