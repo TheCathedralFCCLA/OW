@@ -5,90 +5,105 @@
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            color: #666; 
+            padding: 40px;
+            color: #333; 
             background-color: #f9f9f9;
+            line-height: 1.6;
+        }
+        .debug-box {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            text-align: left;
+            max-width: 600px;
         }
     </style>
 </head>
 <body>
-    <div id="status">Opening OW...</div>
+    <div id="status">Processing redirection...</div>
+    <div id="debug" class="debug-box">Initializing debug logs...</div>
 
     <script>
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
-        const SUBFOLDER = 'OWs'; // The physical folder where PDFs live
+        const SUBFOLDER = 'OWs'; 
 
-        // Translates a web link (e.g., /6-28-2026) to the file format (6.28.26 ow.pdf)
+        function logDebug(msg) {
+            document.getElementById('debug').innerText += "\n" + msg;
+        }
+
         function getTargetFilenameFromPath() {
             const path = window.location.pathname;
             const segments = path.split('/').filter(Boolean);
             
-            // Remove 'ow' and 'ows' from the URL check if they are present
             const filteredSegments = segments.filter(seg => {
                 const lower = seg.toLowerCase();
                 return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
             });
 
             const dateSlug = filteredSegments[0];
-            // Matches 1-2 digit months/days and 2 or 4 digit years (e.g., 6-28-2026 or 06-28-26)
+            logDebug(`[Debug] URL Date Slug detected: "${dateSlug}"`);
+
             const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/;
             const match = dateSlug ? dateSlug.match(dateRegex) : null;
 
             if (match) {
                 let [_, month, day, year] = match;
-                
-                // Strip any leading zeros to match your file style (e.g., "06" becomes "6")
                 month = parseInt(month, 10).toString();
                 day = parseInt(day, 10).toString();
                 
-                // Convert 4-digit years to 2-digit years to match "26" file naming scheme
                 if (year.length === 4) {
                     year = year.slice(-2);
                 }
                 
-                return `${month}.${day}.${year} ow.pdf`;
+                // Constructing the target file string
+                const generatedName = `${month}.${day}.${year} ow.pdf`;
+                logDebug(`[Debug] Script is looking for a file named: "${generatedName}"`);
+                return generatedName;
             }
+            logDebug(`[Debug] URL slug did not match a date pattern.`);
             return null;
         }
 
         async function handleRedirect() {
             const statusDiv = document.getElementById('status');
+            document.getElementById('debug').innerText = "[Debug] Starting fetch...";
             const targetFilename = getTargetFilenameFromPath();
 
             try {
-                // Fetch all files inside the physical "OWs" subfolder via GitHub API
                 const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`);
                 const files = await response.json();
 
                 if (!Array.isArray(files)) {
-                    throw new Error("Could not parse repository contents.");
+                    throw new Error("Could not parse repository contents directory.");
                 }
 
-                // Filter for just PDFs
                 const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+                
+                logDebug(`\n[Debug] Available PDFs found in your /${SUBFOLDER} folder:`);
+                pdfFiles.forEach(f => logDebug(` - "${f.name.toLowerCase()}"`));
 
-                // 1. If a specific date link was requested, try to find it first
                 if (targetFilename) {
                     const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename);
                     
                     if (matchedFile) {
+                        logDebug(`\n[Debug] Match SUCCESSFUL! Redirecting...`);
                         const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
+                        // Comment out the replace line temporarily if you want to read the logs on screen
                         window.location.replace(pdfUrl);
                         return;
                     } else {
-                        statusDiv.innerText = 'Requested date PDF not found. Checking for the latest edition...';
-                        // Short pause so user can read status before falling back
-                        await new Promise(resolve => setTimeout(resolve, 1500));
+                        logDebug(`\n[Debug] Match FAILED. The requested filename and the actual filename don't match exactly.`);
+                        statusDiv.innerText = 'Requested date PDF not found. Checking for latest...';
+                        await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second pause to read logs
                     }
                 }
 
-                // 2. Fallback / Default Behavior: Sort chronologically to find the newest PDF
-                // Handles 2-digit year configurations accurately (e.g., '26' > '25')
+                // Sorting fall-back
                 pdfFiles.sort((a, b) => {
                     const parseDateParts = (name) => {
                         const parts = name.split(' ')[0].split('.');
@@ -98,10 +113,8 @@
                             year: parseInt(parts[2], 10) || 0
                         };
                     };
-
                     const dateA = parseDateParts(a.name);
                     const dateB = parseDateParts(b.name);
-
                     if (dateA.year !== dateB.year) return dateB.year - dateA.year;
                     if (dateA.month !== dateB.month) return dateB.month - dateA.month;
                     return dateB.day - dateA.day;
@@ -109,10 +122,11 @@
 
                 if (pdfFiles.length > 0) {
                     const latestPdf = pdfFiles[0];
+                    logDebug(`[Debug] Falling back to latest file: "${latestPdf.name}"`);
                     const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${latestPdf.name}`;
                     window.location.replace(pdfUrl);
                 } else {
-                    statusDiv.innerText = 'No PDF files found in the OWs directory.';
+                    statusDiv.innerText = 'No PDF files found.';
                 }
             } catch (error) {
                 statusDiv.innerText = 'Error loading document layout.';
