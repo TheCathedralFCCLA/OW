@@ -77,11 +77,11 @@
             const statusDiv = document.getElementById('status');
             const targetFilename = getTargetFilenameFromPath();
             
-            // Generates a unique string based on the exact millisecond (e.g., ?cb=1719945600000)
+            // Keeps API lookups perfectly fresh without changing user-facing URLs
             const cacheBuster = `?cb=${new Date().getTime()}`;
 
             try {
-                // CASE 1: Specific date slug provided -> Search inside /OWs
+                // CASE 1: Date URL requested (e.g., /OW/6-28-26) -> Loads specific target from /OWs folder seamlessly
                 if (targetFilename) {
                     const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                     const files = await response.json();
@@ -91,7 +91,7 @@
                         const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename);
                         
                         if (matchedFile) {
-                            const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}${cacheBuster}`;
+                            const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
                             window.location.replace(pdfUrl);
                             return;
                         }
@@ -101,7 +101,7 @@
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
 
-                // CASE 2: Root URL visited -> Search directly in Root
+                // CASE 2: Root URL visited (e.g., /OW/) -> Loads the main PDF file from the root repository directory
                 const rootResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents${cacheBuster}`);
                 const rootFiles = await rootResponse.json();
 
@@ -111,13 +111,13 @@
                     if (rootPdfs.length > 0) {
                         sortFilesChronologically(rootPdfs);
                         const mainPdf = rootPdfs[0];
-                        const pdfUrl = `https://${USER}.github.io/${REPO}/${mainPdf.name}${cacheBuster}`;
+                        const pdfUrl = `https://${USER}.github.io/${REPO}/${mainPdf.name}`;
                         window.location.replace(pdfUrl);
                         return;
                     }
                 }
 
-                // CASE 3: Backup Fallback -> Use /OWs folder newest file
+                // CASE 3: Dynamic Fallback
                 const backupResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                 const backupFiles = await backupResponse.json();
                 
@@ -126,7 +126,7 @@
                     if (backupPdfs.length > 0) {
                         sortFilesChronologically(backupPdfs);
                         const latestPdf = backupPdfs[0];
-                        const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${latestPdf.name}${cacheBuster}`;
+                        const pdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${latestPdf.name}`;
                         window.location.replace(pdfUrl);
                         return;
                     }
