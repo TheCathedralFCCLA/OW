@@ -22,7 +22,10 @@
         const statusDiv = document.getElementById('ow-loading-status');
         const dateHeader = document.getElementById('ow-dynamic-date');
         
-        // Explicitly tells the application canvas layout how to calculate remaining layout room
+        const USER = 'TheCathedralFCCLA';
+        const REPO = 'OW';
+        const SUBFOLDER = 'OWs';
+
         function resizeViewer() {
             const windowHeight = window.innerHeight;
             const titleHeight = titleContainer.offsetHeight || 80;
@@ -53,43 +56,93 @@
             return rawDateString.replace(/-/g, '/');
         }
 
-        const savedDate = getOWCookie();
-        
-        if (savedDate) {
-            document.cookie = "targetOWDate=; max-age=0; path=/";
-            window.history.pushState(null, '', '/ows/' + savedDate);
-            dateHeader.innerText = formatDisplayDate(savedDate);
+        function sortFilesChronologically(pdfFiles) {
+            pdfFiles.sort((a, b) => {
+                const parseDateParts = (name) => {
+                    const parts = name.split(' ')[0].split('.');
+                    return {
+                        month: parseInt(parts[0], 10) || 0,
+                        day: parseInt(parts[1], 10) || 0,
+                        year: parseInt(parts[2], 10) || 0
+                    };
+                };
+                const dateA = parseDateParts(a.name);
+                const dateB = parseDateParts(b.name);
+
+                if (dateA.year !== dateB.year) return dateB.year - dateA.year;
+                if (dateA.month !== dateB.month) return dateB.month - dateA.month;
+                return dateB.day - dateA.day;
+            });
         }
 
-        let targetUrl = 'https://thecathedralfccla.github.io/OW/';
-        if (savedDate) {
-            targetUrl += savedDate;
-        }
+        // Main Execution Engine
+        async function loadViewer() {
+            const savedDate = getOWCookie();
+            const cacheBuster = `?cb=${new Date().getTime()}`;
+            let targetPdfUrl = '';
+            let finalDisplayDate = '';
 
-        // Set the asset source directly using the data attribute for object compliance
-        const finalPdfPath = targetUrl + '#view=Fit';
-        viewerObject.data = finalPdfPath;
+            // Clear the cookie instantly if it exists
+            if (savedDate) {
+                document.cookie = "targetOWDate=; max-age=0; path=/";
+                window.history.pushState(null, '', '/ows/' + savedDate);
+                finalDisplayDate = formatDisplayDate(savedDate);
+            }
 
-        // Objects do not utilize standard iframe onload callbacks, so we track their stream mount manually
-        setTimeout(() => {
-            statusDiv.style.display = 'none';
-            viewerObject.style.display = 'block';
-            resizeViewer();
-        }, 300);
-
-        // Fallback title extractor parsing via fallback string handling
-        if (!savedDate) {
             try {
-                const filenameSegment = targetUrl.split('/').pop() || "";
-                const cleanDatePart = filenameSegment.split(' ')[0];
-                if (cleanDatePart && cleanDatePart.includes('.')) {
-                    dateHeader.innerText = cleanDatePart.replace(/\./g, '/');
-                } else {
-                    dateHeader.innerText = "Latest Edition";
+                // Fetch the list of files directly inside the /OWs directory
+                const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
+                const files = await response.json();
+
+                if (Array.isArray(files)) {
+                    const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+                    sortFilesChronologically(pdfFiles);
+
+                    if (pdfFiles.length > 0) {
+                        if (savedDate) {
+                            // OPTION A: Specific date requested via URL (e.g., fccla.org/ows/6-21-26)
+                            // Look for the specific filename matching your pattern (e.g., "6.21.26 ow.pdf")
+                            const targetFilename = `${parseInt(savedDate.split('-')[0], 10)}.${parseInt(savedDate.split('-')[1], 10)}.${savedDate.split('-')[2].slice(-2)} ow.pdf`;
+                            const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename.toLowerCase());
+                            
+                            if (matchedFile) {
+                                targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
+                            } else {
+                                // If the specific date isn't found, fallback gracefully to the absolute newest file in /OWs
+                                targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
+                                const cleanDatePart = pdfFiles[0].name.split(' ')[0];
+                                finalDisplayDate = cleanDatePart.replace(/\./g, '/');
+                            }
+                        } else {
+                            // OPTION B: Base page visited (fccla.org/ows) -> Grab the chronological newest file from /OWs folder
+                            targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
+                            const cleanDatePart = pdfFiles[0].name.split(' ')[0];
+                            finalDisplayDate = cleanDatePart.replace(/\./g, '/');
+                        }
+                    }
                 }
-            } catch(e) {
-                dateHeader.innerText = "Latest Edition";
+
+                if (targetPdfUrl) {
+                    dateHeader.innerText = finalDisplayDate;
+                    viewerObject.data = targetPdfUrl + '#view=Fit';
+                    
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                        viewerObject.style.display = 'block';
+                        resizeViewer();
+                    }, 300);
+                } else {
+                    dateHeader.innerText = "";
+                    statusDiv.innerText = 'No Order of Worship documents found.';
+                }
+
+            } catch (error) {
+                dateHeader.innerText = "Error";
+                statusDiv.innerText = 'Error loading document viewer engine layers.';
+                console.error(error);
             }
         }
+
+        loadViewer();
     })();
 </script>
