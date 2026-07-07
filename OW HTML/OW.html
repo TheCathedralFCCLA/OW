@@ -1,0 +1,79 @@
+<div id="ow-embed-container" style="width:100%; height:1000px; display:flex; flex-direction:column;">
+    
+    <!-- Centered Header Block utilizing Squarespace site style inheritance -->
+    <div id="ow-title-container" style="text-align:center;">
+        <h1>Order of Worship</h1>
+        <h3 id="ow-dynamic-date">Loading Date...</h3>
+    </div>
+
+    <!-- Main Document Viewer Area -->
+    <div style="position:relative; flex-grow:1; width:100%;">
+        <div id="ow-loading-status" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
+            Loading OW Document Viewer...
+        </div>
+        <iframe id="dynamic-ow-viewer" src="about:blank" style="width:100%; height:100%; border:none; display:none;" allowfullscreen></iframe>
+    </div>
+</div>
+
+<script>
+    (function() {
+        const viewerFrame = document.getElementById('dynamic-ow-viewer');
+        const statusDiv = document.getElementById('ow-loading-status');
+        const dateHeader = document.getElementById('ow-dynamic-date');
+        
+        function getOWCookie() {
+            const name = "targetOWDate=";
+            const decodedCookie = decodeURIComponent(document.cookie);
+            const ca = decodedCookie.split(';');
+            for(let i = 0; i < ca.length; i++) {
+                let c = ca[i].trim();
+                if (c.indexOf(name) === 0) {
+                    return c.substring(name.length, c.length);
+                }
+            }
+            return null;
+        }
+
+        function formatDisplayDate(rawDateString) {
+            if (!rawDateString) return "";
+            return rawDateString.replace(/-/g, '/');
+        }
+
+        const savedDate = getOWCookie();
+        
+        if (savedDate) {
+            document.cookie = "targetOWDate=; max-age=0; path=/";
+            window.history.pushState(null, '', '/ows/' + savedDate);
+            dateHeader.innerText = formatDisplayDate(savedDate);
+        }
+
+        let targetUrl = 'https://thecathedralfccla.github.io/OW/';
+        if (savedDate) {
+            targetUrl += savedDate;
+        }
+
+        viewerFrame.src = targetUrl;
+
+        viewerFrame.onload = function() {
+            statusDiv.style.display = 'none';
+            viewerFrame.style.display = 'block';
+
+            if (!savedDate) {
+                try {
+                    const iframeUrl = viewerFrame.contentWindow.location.href || viewerFrame.src;
+                    const decodedUrl = decodeURIComponent(iframeUrl);
+                    const filenameSegment = decodedUrl.split('/').pop();
+                    const cleanDatePart = filenameSegment.split(' ')[0];
+                    
+                    if (cleanDatePart && cleanDatePart.includes('.')) {
+                        dateHeader.innerText = cleanDatePart.replace(/\./g, '/');
+                    } else {
+                        dateHeader.innerText = "Latest Edition";
+                    }
+                } catch(e) {
+                    dateHeader.innerText = "Latest Edition";
+                }
+            }
+        };
+    })();
+</script>
