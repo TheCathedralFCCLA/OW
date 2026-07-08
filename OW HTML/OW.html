@@ -114,7 +114,6 @@
             </div>
             <div id="status-bar" style="display: none;">Loading document framework...</div>
             
-            <!-- Swapped: "Watch Service" on left, "Open OW" on right -->
             <div class="ow-actions-wrapper">
                 <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
                 <a id="open-new-tab-btn" class="btn" target="_blank">Open OW in New Tab</a>
@@ -146,6 +145,14 @@
             let year = parseInt(y, 10);
             if (year > 1000) year = year % 100;
             return { month, day, year };
+        }
+
+        // Helper to cleanly extract the plain filename from a complete URL link if needed
+        function getFilenameFromEntry(entry) {
+            if (entry.includes('/')) {
+                return entry.substring(entry.lastIndexOf('/') + 1);
+            }
+            return entry;
         }
 
         function getTargetFilenameFromPath() {
@@ -180,7 +187,8 @@
 
         function sortFilesChronologically(pdfNames) {
             pdfNames.sort((a, b) => {
-                const parseDateParts = (name) => {
+                const parseDateParts = (entry) => {
+                    const name = getFilenameFromEntry(entry);
                     const parts = name.split(' ')[0].split('.');
                     return normalizeDate(parts[0] || 0, parts[1] || 0, parts[2] || 0);
                 };
@@ -248,7 +256,7 @@
             const pathTargetFilename = getTargetFilenameFromPath();
             const cacheBuster = `?cb=${new Date().getTime()}`;
             let activeFile = null;
-            let fileNames = [];
+            let fileEntries = [];
 
             try {
                 if (window.location.protocol === 'file:') {
@@ -256,39 +264,41 @@
                     const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`);
                     const apiData = await response.json();
                     if (Array.isArray(apiData)) {
-                        fileNames = apiData.map(item => item.name);
+                        fileEntries = apiData.map(item => item.name);
                     }
                 } else {
                     console.log("[Directory Engine] Live hosted web cluster detected. Routing lookup data through static index pipelines...");
                     const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`);
-                    fileNames = await response.json();
+                    fileEntries = await response.json();
                 }
 
-                if (Array.isArray(fileNames)) {
-                    const pdfFiles = fileNames.filter(name => {
-                        const lower = name.toLowerCase();
-                        return lower.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(lower);
+                if (Array.isArray(fileEntries)) {
+                    // Filters the entry strings safely whether they contain full URLs or clean file titles
+                    const pdfFiles = fileEntries.filter(entry => {
+                        const lower = entry.toLowerCase();
+                        return lower.endsWith('.pdf') && /\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/.test(lower);
                     });
                     
                     sortFilesChronologically(pdfFiles);
 
                     if (pdfFiles.length > 0) {
                         owDropdown.innerHTML = '';
-                        pdfFiles.forEach(name => {
-                            const cleanDatePart = name.split(/[\s_+]/)[0];
+                        pdfFiles.forEach(entry => {
+                            const filename = getFilenameFromEntry(entry);
+                            const cleanDatePart = filename.split(/[\s_+]/)[0];
                             const labelDate = cleanDatePart.replace(/\./g, '/');
                             const option = document.createElement('option');
-                            option.value = name;
+                            option.value = filename; // Stores the clean tracking filename value
                             option.setAttribute('data-date', cleanDatePart);
                             option.innerText = labelDate;
                             owDropdown.appendChild(option);
                         });
 
                         if (pathTargetFilename) {
-                            const match = pdfFiles.find(name => name.toLowerCase() === pathTargetFilename.toLowerCase());
-                            activeFile = match || pdfFiles[0];
+                            const match = pdfFiles.find(entry => getFilenameFromEntry(entry).toLowerCase() === pathTargetFilename.toLowerCase());
+                            activeFile = match ? getFilenameFromEntry(match) : getFilenameFromEntry(pdfFiles[0]);
                         } else {
-                            activeFile = pdfFiles[0];
+                            activeFile = getFilenameFromEntry(pdfFiles[0]);
                         }
 
                         owDropdown.value = activeFile;

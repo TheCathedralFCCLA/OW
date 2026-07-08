@@ -3,13 +3,13 @@ name: Generate OW PDF Directory Index
 on:
   push:
     branches:
-      - main     # Triggers automatically when pushing code or assets to your main branch
+      - main     
     paths:
-      - 'OWs/**' # Triggers only if changes occur inside your OWs subfolder
-  workflow_dispatch: # Allows you to manually click a button in GitHub to force-run the scan
+      - 'OWs/**' 
+  workflow_dispatch: 
 
 permissions:
-  contents: write # Grants the runner permission to write and commit the index back to your repo
+  contents: write 
 
 jobs:
   build-index:
@@ -24,10 +24,10 @@ jobs:
         cd OWs
         echo "Scanning files inside the /OWs directory..."
         
-        # Pulls clean file names, filters down to files ending in .pdf, and formats them into a JSON array
-        ls -1 | grep -i '\.pdf$' | jq -R . | jq -s . > index.json
+        # FIXED: Lists files, filters for PDFs, and programmatically appends your direct GitHub Pages link schema to each file entry
+        ls -1 | grep -i '\.pdf$' | jq -R --arg base "https://TheCathedralFCCLA.github.io/OW/OWs/" '$base + .' | jq -s . > index.json
         
-        echo "Index file tracking grid compiled successfully:"
+        echo "Index file tracking grid compiled successfully with absolute web URLs:"
         cat index.json
 
     - name: Commit and Sync Directory Manifest to Main Track
@@ -37,7 +37,6 @@ jobs:
         
         git add OWs/index.json
         
-        # Check if the file actually changed before running a blind commit loop
         if git diff --staged --quiet; then
           echo "No layout modifications or new asset paths detected. Skipping sync."
         else
