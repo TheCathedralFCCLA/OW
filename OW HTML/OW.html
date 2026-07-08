@@ -8,7 +8,6 @@
             margin: 0;
             padding: 0;
             width: 100%;
-            /* REMOVED height: auto */
             overflow-y: auto;
             overflow-x: hidden;
             background-color: #f9f9f9;
@@ -18,7 +17,9 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            /* REMOVED height: auto */
+            /* FIXED: Force an explicit bottom padding footprint to keep elements from clipping */
+            padding-bottom: 60px !important; 
+            box-sizing: border-box;
         }
         #top-bar {
             display: flex;
@@ -86,7 +87,7 @@
             padding: 0;
         }
         #bottom-bar {
-            padding: 15px 10px;
+            padding: 20px 10px;
             background: #fff;
             border-top: 1px solid #eee;
             text-align: center;
@@ -101,6 +102,7 @@
 </head>
 <body>
     <div class="container">
+        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -112,8 +114,10 @@
             <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
         </div>
         
+        <!-- Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
 
+        <!-- Bottom Actions Footer Block -->
         <div id="bottom-bar">
             <a id="open-new-tab-btn" class="btn" target="_blank">Open PDF in New Tab</a>
         </div>
