@@ -56,16 +56,18 @@
             return rawDateString.replace(/-/g, '/');
         }
 
+        // Extracts the date components from the beginning of a filename (e.g., "6.28.26")
+        function parseDateParts(name) {
+            const match = name.trim().split(/[\s_+]/)[0].split('.');
+            return {
+                month: parseInt(match[0], 10) || 0,
+                day: parseInt(match[1], 10) || 0,
+                year: parseInt(match[2], 10) || 0
+            };
+        }
+
         function sortFilesChronologically(pdfFiles) {
             pdfFiles.sort((a, b) => {
-                const parseDateParts = (name) => {
-                    const parts = name.split(' ')[0].split('.');
-                    return {
-                        month: parseInt(parts[0], 10) || 0,
-                        day: parseInt(parts[1], 10) || 0,
-                        year: parseInt(parts[2], 10) || 0
-                    };
-                };
                 const dateA = parseDateParts(a.name);
                 const dateB = parseDateParts(b.name);
 
@@ -82,7 +84,6 @@
             let targetPdfUrl = '';
             let finalDisplayDate = '';
 
-            // Clear the cookie instantly if it exists
             if (savedDate) {
                 document.cookie = "targetOWDate=; max-age=0; path=/";
                 window.history.pushState(null, '', '/ows/' + savedDate);
@@ -90,33 +91,44 @@
             }
 
             try {
-                // Fetch the list of files directly inside the /OWs directory
                 const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                 const files = await response.json();
 
                 if (Array.isArray(files)) {
-                    const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+                    // Filters to ensure it is a PDF and starts with a numeric digit format
+                    const pdfFiles = files.filter(file => {
+                        const name = file.name.toLowerCase();
+                        return name.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(name);
+                    });
+                    
                     sortFilesChronologically(pdfFiles);
 
                     if (pdfFiles.length > 0) {
                         if (savedDate) {
-                            // OPTION A: Specific date requested via URL (e.g., fccla.org/ows/6-21-26)
-                            // Look for the specific filename matching your pattern (e.g., "6.21.26 ow.pdf")
-                            const targetFilename = `${parseInt(savedDate.split('-')[0], 10)}.${parseInt(savedDate.split('-')[1], 10)}.${savedDate.split('-')[2].slice(-2)} ow.pdf`;
-                            const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename.toLowerCase());
+                            // OPTION A: Specific date requested via URL (e.g., fccla.org/ows/6-28-26)
+                            const dateParts = savedDate.split('-');
+                            const searchMonth = parseInt(dateParts[0], 10);
+                            const searchDay = parseInt(dateParts[1], 10);
+                            const searchYear = parseInt(dateParts[2].slice(-2), 10); // handles '2026' or '26'
+
+                            // Find a file whose numerical prefixes match the requested date components
+                            const matchedFile = pdfFiles.find(file => {
+                                const fParts = parseDateParts(file.name);
+                                return fParts.month === searchMonth && fParts.day === searchDay && fParts.year === searchYear;
+                            });
                             
                             if (matchedFile) {
                                 targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
                             } else {
-                                // If the specific date isn't found, fallback gracefully to the absolute newest file in /OWs
+                                // Graceful Fallback: Date not found -> use newest chronological file in /OWs
                                 targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
-                                const cleanDatePart = pdfFiles[0].name.split(' ')[0];
+                                const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
                                 finalDisplayDate = cleanDatePart.replace(/\./g, '/');
                             }
                         } else {
                             // OPTION B: Base page visited (fccla.org/ows) -> Grab the chronological newest file from /OWs folder
                             targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
-                            const cleanDatePart = pdfFiles[0].name.split(' ')[0];
+                            const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
                             finalDisplayDate = cleanDatePart.replace(/\./g, '/');
                         }
                     }
