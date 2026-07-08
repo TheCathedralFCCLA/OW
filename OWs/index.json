@@ -1,21 +1,97 @@
-[
-  "https://TheCathedralFCCLA.github.io/OW/OWs/3-1-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/3-15-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/3-22-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/3-29-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/3-8-26 OW Draft-pdf",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/4-12-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/4-19-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/4-26-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/4-5-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/5-10-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/5-17-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/5-24-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/5-3-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/5-31-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/6-14-26 OW FINAL-pdf",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/6-21-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/6-28-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/6-7-26",
-  "https://TheCathedralFCCLA.github.io/OW/OWs/7-5-26"
-]
+{
+  "3-1-26": {
+    "filename": "3.1.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/3.1.26%20OW.pdf",
+    "display_date": "3/1/26"
+  },
+  "3-15-26": {
+    "filename": "3.15.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/3.15.26%20OW.pdf",
+    "display_date": "3/15/26"
+  },
+  "3-22-26": {
+    "filename": "3.22.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/3.22.26%20OW.pdf",
+    "display_date": "3/22/26"
+  },
+  "3-29-26": {
+    "filename": "3.29.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/3.29.26%20OW.pdf",
+    "display_date": "3/29/26"
+  },
+  "3-8-26": {
+    "filename": "3.8.26 OW Draft.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/3.8.26%20OW%20Draft.pdf",
+    "display_date": "3/8/26"
+  },
+  "4-12-26": {
+    "filename": "4.12.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/4.12.26%20OW.pdf",
+    "display_date": "4/12/26"
+  },
+  "4-19-26": {
+    "filename": "4.19.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/4.19.26%20OW.pdf",
+    "display_date": "4/19/26"
+  },
+  "4-26-26": {
+    "filename": "4.26.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/4.26.26%20OW.pdf",
+    "display_date": "4/26/26"
+  },
+  "4-5-26": {
+    "filename": "4.5.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/4.5.26%20OW.pdf",
+    "display_date": "4/5/26"
+  },
+  "5-10-26": {
+    "filename": "5.10.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/5.10.26%20OW.pdf",
+    "display_date": "5/10/26"
+  },
+  "5-17-26": {
+    "filename": "5.17.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/5.17.26%20OW.pdf",
+    "display_date": "5/17/26"
+  },
+  "5-24-26": {
+    "filename": "5.24.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/5.24.26%20OW.pdf",
+    "display_date": "5/24/26"
+  },
+  "5-3-26": {
+    "filename": "5.3.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/5.3.26%20OW.pdf",
+    "display_date": "5/3/26"
+  },
+  "5-31-26": {
+    "filename": "5.31.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/5.31.26%20OW.pdf",
+    "display_date": "5/31/26"
+  },
+  "6-14-26": {
+    "filename": "6.14.26 OW FINAL.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/6.14.26%20OW%20FINAL.pdf",
+    "display_date": "6/14/26"
+  },
+  "6-21-26": {
+    "filename": "6.21.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/6.21.26%20OW.pdf",
+    "display_date": "6/21/26"
+  },
+  "6-28-26": {
+    "filename": "6.28.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/6.28.26%20OW.pdf",
+    "display_date": "6/28/26"
+  },
+  "6-7-26": {
+    "filename": "6.7.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/6.7.26%20OW.pdf",
+    "display_date": "6/7/26"
+  },
+  "7-5-26": {
+    "filename": "7.5.26 OW.pdf",
+    "url": "https://TheCathedralFCCLA.github.io/OW/OWs/7.5.26%20OW.pdf",
+    "display_date": "7/5/26"
+  }
+}
