@@ -17,7 +17,6 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            /* FIXED: Force an explicit bottom padding footprint to keep elements from clipping */
             padding-bottom: 60px !important; 
             box-sizing: border-box;
         }
@@ -102,7 +101,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -114,10 +112,8 @@
             <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
         </div>
         
-        <!-- Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
 
-        <!-- Bottom Actions Footer Block -->
         <div id="bottom-bar">
             <a id="open-new-tab-btn" class="btn" target="_blank">Open PDF in New Tab</a>
         </div>
@@ -127,6 +123,9 @@
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
         const SUBFOLDER = 'OWs';
+        
+        const REPO_DOCS_JSON = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/index.json`;
+        const GITHUB_API_URL = `https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`;
         const YT_JSON_URL = 'https://raw.githubusercontent.com/cju-media/FCCLA-Youtube-Checker/main/data/playlist_streams.json';
 
         const viewerFrame = document.getElementById('ow-viewer');
@@ -139,7 +138,6 @@
             let month = parseInt(m, 10);
             let day = parseInt(d, 10);
             let year = parseInt(y, 10);
-
             if (year > 1000) year = year % 100;
             return { month, day, year };
         }
@@ -174,14 +172,14 @@
             return null; 
         }
 
-        function sortFilesChronologically(pdfFiles) {
-            pdfFiles.sort((a, b) => {
+        function sortFilesChronologically(pdfNames) {
+            pdfNames.sort((a, b) => {
                 const parseDateParts = (name) => {
                     const parts = name.split(' ')[0].split('.');
                     return normalizeDate(parts[0] || 0, parts[1] || 0, parts[2] || 0);
                 };
-                const dateA = parseDateParts(a.name);
-                const dateB = parseDateParts(b.name);
+                const dateA = parseDateParts(a);
+                const dateB = parseDateParts(b);
 
                 if (dateA.year !== dateB.year) return dateB.year - dateA.year;
                 if (dateA.month !== dateB.month) return dateB.month - dateA.month;
@@ -211,8 +209,6 @@
             try {
                 const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
-                
-                console.log("[YT Engine] Playlist Dictionary lookup database loaded successfully.");
                 
                 if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
                     const videoUrl = data[targetKey][0];
@@ -246,52 +242,64 @@
             const pathTargetFilename = getTargetFilenameFromPath();
             const cacheBuster = `?cb=${new Date().getTime()}`;
             let activeFile = null;
+            let fileNames = [];
 
             try {
-                const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
-                const files = await response.json();
+                // FIXED: Clever cross-origin fallback logic to support native local desktop testing environment files seamlessly
+                if (window.location.protocol === 'file:') {
+                    console.log("[Directory Engine] Local session routing detected. Querying via open GitHub API tracking routes to prevent local CORS exceptions...");
+                    const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`);
+                    const apiData = await response.json();
+                    if (Array.isArray(apiData)) {
+                        fileNames = apiData.map(item => item.name);
+                    }
+                } else {
+                    console.log("[Directory Engine] Live hosted web cluster detected. Routing lookup data through static index pipelines...");
+                    const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`);
+                    fileNames = await response.json();
+                }
 
-                if (Array.isArray(files)) {
-                    const pdfFiles = files.filter(file => {
-                        const name = file.name.toLowerCase();
-                        return name.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(name);
+                if (Array.isArray(fileNames)) {
+                    const pdfFiles = fileNames.filter(name => {
+                        const lower = name.toLowerCase();
+                        return lower.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(lower);
                     });
                     
                     sortFilesChronologically(pdfFiles);
 
                     if (pdfFiles.length > 0) {
                         owDropdown.innerHTML = '';
-                        pdfFiles.forEach(file => {
-                            const cleanDatePart = file.name.split(/[\s_+]/)[0];
+                        pdfFiles.forEach(name => {
+                            const cleanDatePart = name.split(/[\s_+]/)[0];
                             const labelDate = cleanDatePart.replace(/\./g, '/');
                             const option = document.createElement('option');
-                            option.value = file.name;
+                            option.value = name;
                             option.setAttribute('data-date', cleanDatePart);
                             option.innerText = labelDate;
                             owDropdown.appendChild(option);
                         });
 
                         if (pathTargetFilename) {
-                            const match = pdfFiles.find(file => file.name.toLowerCase() === pathTargetFilename.toLowerCase());
+                            const match = pdfFiles.find(name => name.toLowerCase() === pathTargetFilename.toLowerCase());
                             activeFile = match || pdfFiles[0];
                         } else {
                             activeFile = pdfFiles[0];
                         }
 
-                        owDropdown.value = activeFile.name;
+                        owDropdown.value = activeFile;
                     }
                 }
 
                 if (activeFile) {
-                    const cleanDatePart = activeFile.name.split(/[\s_+]/)[0];
-                    switchOW(activeFile.name, cleanDatePart);
+                    const cleanDatePart = activeFile.split(/[\s_+]/)[0];
+                    switchOW(activeFile, cleanDatePart);
                 } else {
                     statusBar.innerText = 'No documents found.';
                     owDropdown.innerHTML = '<option value="">No archives available</option>';
                 }
 
             } catch (error) {
-                statusBar.innerText = 'Error loading application data arrays.';
+                statusBar.innerText = 'Error loading document tracking directory list.';
                 console.error(error);
             }
         }
