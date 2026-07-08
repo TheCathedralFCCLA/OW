@@ -8,8 +8,7 @@
             margin: 0;
             padding: 0;
             width: 100%;
-            /* CHANGED: Allow the page document to scroll vertically down naturally */
-            height: auto;
+            /* REMOVED height: auto */
             overflow-y: auto;
             overflow-x: hidden;
             background-color: #f9f9f9;
@@ -19,7 +18,7 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            height: auto;
+            /* REMOVED height: auto */
         }
         #top-bar {
             display: flex;
@@ -81,7 +80,6 @@
         }
         iframe {
             width: 100%;
-            /* CHANGED: Give the PDF viewer an explicit height so it takes up layout room */
             height: 900px;
             border: none;
             margin: 0;
@@ -94,7 +92,6 @@
             text-align: center;
         }
         
-        /* Mobile adjustment to shrink layout scale comfortably */
         @media (max-width: 767px) {
             iframe {
                 height: 650px;
