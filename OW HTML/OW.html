@@ -1,54 +1,90 @@
-<div id="ow-embed-container" style="width:100%; display:flex; flex-direction:column; margin:0; padding:0; overflow:hidden;">
+<style>
+    /* Force Squarespace's row layout containers to collapse default padding/margin blocks */
+    .page-section, 
+    .content-wrapper, 
+    .sqs-layout, 
+    .sqs-block-code,
+    #dynamic-ow-container,
+    #dynamic-ow-container > div {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* Fixed flex container that conforms to the parent Squarespace block layout bounds */
+    .ow-master-grid {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%; /* Capped: follows the exact container frame boundaries dragging out in Squarespace */
+        margin: 0 auto;
+        padding: 0;
+        box-sizing: border-box;
+        margin-top: -20px !important; /* Pulls layout snug up to navigation */
+    }
+
+    .ow-title-block h1 {
+        margin: 0 !important;
+        padding: 0 !important;
+        text-align: center;
+    }
+
+    .ow-selector-inline {
+        text-align: center;
+        padding: 8px 0 14px 0;
+        margin: 0;
+    }
+
+    .ow-dropdown-style {
+        padding: 6px 12px;
+        font-size: 16px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        max-width: 100%;
+        font-family: inherit;
+        cursor: pointer;
+    }
+
+    .ow-viewer-wrapper {
+        position: relative;
+        width: 100%;
+        flex-grow: 1;
+        height: 100%;
+        min-height: 0;
+    }
+</style>
+
+<div class="ow-master-grid" id="ow-embed-container">
     
-    <div id="ow-title-container" style="text-align:center; flex-shrink:0;">
+    <!-- Header/Selector Area positioned strictly above document frames -->
+    <div class="ow-title-block" id="ow-title-container">
         <h1>Order of Worship</h1>
-        <h3 id="ow-dynamic-date">Loading Date...</h3>
+        <div class="ow-selector-inline">
+            <select id="ow-dropdown" class="ow-dropdown-style">
+                <option value="">Loading historical list...</option>
+            </select>
+        </div>
     </div>
 
-    <div id="ow-frame-wrapper" style="position:relative; width:100%; min-height:0; flex-grow:1;">
+    <!-- Main document canvas forced to fit remaining block height dimensions cleanly -->
+    <div class="ow-viewer-wrapper" id="ow-frame-wrapper">
         <div id="ow-loading-status" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
             Loading OW Document Viewer...
         </div>
-        <object id="dynamic-ow-viewer" type="application/pdf" style="width:100%; height:100%; display:none;"></object>
-    </div>
-
-    <!-- Dropdown Selector Container Below PDF -->
-    <div id="ow-selector-container" style="text-align:center; padding:15px; background:#f9f9f9; border-top:1px solid #eee; flex-shrink:0;">
-        <label for="ow-dropdown" style="font-weight:bold; margin-right:10px;">Select an Order of Worship:</label>
-        <select id="ow-dropdown" style="padding:8px 12px; font-size:16px; border-radius:4px; border:1px solid #ccc; max-width:100%;">
-            <option value="">Loading historical list...</option>
-        </select>
+        <object id="dynamic-ow-viewer" type="application/pdf" style="width:100%; height:100%; display:none;" data=""></object>
     </div>
 </div>
 
 <script>
     (function() {
-        const embedContainer = document.getElementById('ow-embed-container');
-        const frameWrapper = document.getElementById('ow-frame-wrapper');
-        const titleContainer = document.getElementById('ow-title-container');
-        const selectorContainer = document.getElementById('ow-selector-container');
         const viewerObject = document.getElementById('dynamic-ow-viewer');
         const statusDiv = document.getElementById('ow-loading-status');
-        const dateHeader = document.getElementById('ow-dynamic-date');
         const owDropdown = document.getElementById('ow-dropdown');
         
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
         const SUBFOLDER = 'OWs';
-
-        function resizeViewer() {
-            const windowHeight = window.innerHeight;
-            const titleHeight = titleContainer.offsetHeight || 80;
-            const selectorHeight = selectorContainer.offsetHeight || 60;
-            // Deduct both header and footer dropdown containers to prevent scrolling issues
-            const targetHeight = windowHeight - titleHeight - selectorHeight - 20; 
-            
-            frameWrapper.style.height = targetHeight + 'px';
-            embedContainer.style.height = windowHeight + 'px';
-        }
-
-        resizeViewer();
-        window.addEventListener('resize', resizeViewer);
 
         function getOWCookie() {
             const name = "targetOWDate=";
@@ -61,11 +97,6 @@
                 }
             }
             return null;
-        }
-
-        function formatDisplayDate(rawDateString) {
-            if (!rawDateString) return "";
-            return rawDateString.replace(/-/g, '/');
         }
 
         function parseDateParts(name) {
@@ -88,20 +119,14 @@
             });
         }
 
-        // Helper to update url and switch pdf details uniformly
         function switchOW(fileName, cleanDatePart) {
             const targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${fileName}`;
-            const finalDisplayDate = cleanDatePart.replace(/\./g, '/');
             const urlSlug = cleanDatePart.replace(/\./g, '-');
 
-            dateHeader.innerText = finalDisplayDate;
             viewerObject.data = targetPdfUrl + '#view=Fit';
-            
-            // Updates URL bar dynamically without refreshing page
             window.history.pushState(null, '', '/ows/' + urlSlug);
         }
 
-        // Main Execution Engine
         async function loadViewer() {
             const savedDate = getOWCookie();
             const cacheBuster = `?cb=${new Date().getTime()}`;
@@ -126,7 +151,6 @@
                     sortFilesChronologically(pdfFiles);
 
                     if (pdfFiles.length > 0) {
-                        // Populate Dropdown Menus
                         owDropdown.innerHTML = '';
                         pdfFiles.forEach(file => {
                             const cleanDatePart = file.name.split(/[\s_+]/)[0];
@@ -161,7 +185,6 @@
                             activeCleanDate = pdfFiles[0].name.split(/[\s_+]/)[0];
                         }
 
-                        // Set current selection item in dropdown element UI matching active state
                         owDropdown.value = activeFile.name;
                     }
                 }
@@ -172,22 +195,18 @@
                     setTimeout(() => {
                         statusDiv.style.display = 'none';
                         viewerObject.style.display = 'block';
-                        resizeViewer();
-                    }, 300);
+                    }, 200);
                 } else {
-                    dateHeader.innerText = "";
                     statusDiv.innerText = 'No Order of Worship documents found.';
                     owDropdown.innerHTML = '<option value="">No archives available</option>';
                 }
 
             } catch (error) {
-                dateHeader.innerText = "Error";
                 statusDiv.innerText = 'Error loading document viewer engine layers.';
                 console.error(error);
             }
         }
 
-        // Attach Dropdown Event Handler Interaction Change Listener 
         owDropdown.addEventListener('change', function(e) {
             const selectedFileName = e.target.value;
             if (!selectedFileName) return;
@@ -195,7 +214,6 @@
             const selectedOption = e.target.options[e.target.selectedIndex];
             const cleanDatePart = selectedOption.getAttribute('data-date');
             
-            // Temporarily mask view while rendering swapping elements smoothly
             viewerObject.style.display = 'none';
             statusDiv.style.display = 'block';
             statusDiv.innerText = 'Loading Selected OW Document...';
@@ -205,8 +223,7 @@
             setTimeout(() => {
                 statusDiv.style.display = 'none';
                 viewerObject.style.display = 'block';
-                resizeViewer();
-            }, 300);
+            }, 200);
         });
 
         loadViewer();
