@@ -9,7 +9,7 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden; /* Prevents double page scrollbars on live site */
+            overflow: hidden;
             background-color: #f9f9f9;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
@@ -124,27 +124,43 @@
         const openNewTabBtn = document.getElementById('open-new-tab-btn');
         const owDropdown = document.getElementById('ow-dropdown');
 
+        // Normalizes variations into standardized numeric component models
+        function normalizeDate(m, d, y) {
+            let month = parseInt(m, 10);
+            let day = parseInt(d, 10);
+            let year = parseInt(y, 10);
+
+            if (year > 1000) year = year % 100;
+            return { month, day, year };
+        }
+
+        // Handles both live Squarespace paths and local file system query strings (?date=7-5-26)
         function getTargetFilenameFromPath() {
-            const path = window.location.pathname;
-            const segments = path.split('/').filter(Boolean);
-            
-            const filteredSegments = segments.filter(seg => {
-                const lower = seg.toLowerCase();
-                return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
-            });
+            let dateSlug = null;
 
-            if (filteredSegments.length === 0) return null; 
+            if (window.location.protocol === 'file:') {
+                const urlParams = new URLSearchParams(window.location.search);
+                dateSlug = urlParams.get('date'); 
+            } else {
+                const path = window.location.pathname;
+                const segments = path.split('/').filter(Boolean);
+                const filteredSegments = segments.filter(seg => {
+                    const lower = seg.toLowerCase();
+                    return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
+                });
+                if (filteredSegments.length > 0) {
+                    dateSlug = filteredSegments[0];
+                }
+            }
 
-            const dateSlug = filteredSegments[0];
+            if (!dateSlug) return null;
+
             const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/;
             const match = dateSlug.match(dateRegex);
 
             if (match) {
-                let [_, month, day, year] = match;
-                month = parseInt(month, 10).toString();
-                day = parseInt(day, 10).toString();
-                if (year.length === 4) year = year.slice(-2);
-                return `${month}.${day}.${year} ow.pdf`;
+                const norm = normalizeDate(match[1], match[2], match[3]);
+                return `${norm.month}.${norm.day}.${norm.year} ow.pdf`;
             }
             return null; 
         }
@@ -153,11 +169,7 @@
             pdfFiles.sort((a, b) => {
                 const parseDateParts = (name) => {
                     const parts = name.split(' ')[0].split('.');
-                    return {
-                        month: parseInt(parts[0], 10) || 0,
-                        day: parseInt(parts[1], 10) || 0,
-                        year: parseInt(parts[2], 10) || 0
-                    };
+                    return normalizeDate(parts[0] || 0, parts[1] || 0, parts[2] || 0);
                 };
                 const dateA = parseDateParts(a.name);
                 const dateB = parseDateParts(b.name);
@@ -172,73 +184,41 @@
             const cleanPart = filename.split(/[\s_+]/)[0];
             const parts = cleanPart.split('.');
             if (parts.length >= 3) {
-                return {
-                    month: parseInt(parts[0], 10),
-                    day: parseInt(parts[1], 10),
-                    year: parseInt(parts[2].slice(-2), 10)
-                };
+                return normalizeDate(parts[0], parts[1], parts[2]);
             }
             return null;
         }
 
-        // Cross-references the open file parameters with playlist telemetry logs
+        // Cross-references the open file parameters with key-value playlist map dictionary entries
         async function matchYoutubeVideo(pdfFilename) {
             watchBtn.style.display = 'none'; 
             const targetDate = extractDateFromFilename(pdfFilename);
             if (!targetDate) return;
 
-            console.log(`[YT Engine] Searching match for PDF Date: ${targetDate.month}/${targetDate.day}/${targetDate.year}`);
+            // Generate the string format matching dictionary keys (e.g. 20260705)
+            const pad = (num) => String(num).padStart(2, '0');
+            const targetKey = `20${pad(targetDate.year)}${pad(targetDate.month)}${pad(targetDate.day)}`;
+
+            console.log(`[YT Engine] Target Key generated for lookup query: "${targetKey}"`);
 
             try {
                 const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
                 
-                console.log("[YT Engine] Playlist JSON payload fetched successfully:", data);
+                console.log("[YT Engine] Playlist Dictionary lookup database loaded successfully.");
                 
-                // Inspects both native flat arrays and standard payload envelopes
-                const itemsList = Array.isArray(data) ? data : (data.items || []);
-                
-                const matchedItem = itemsList.find(item => {
-                    const timeString = item.scheduledStartTime || item.publishedAt || (item.snippet ? item.snippet.publishedAt : null);
-                    if (!timeString) return false;
-
-                    const rawDatePart = timeString.split('T')[0]; // "2026-07-05"
-                    const dateParts = rawDatePart.split('-');
+                // Direct fast key lookup extraction inside dictionary payload
+                if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
+                    const videoUrl = data[targetKey][0];
+                    console.log(`[YT Engine] MATCH FOUND IN MAP MATRIX! Live URL string path: ${videoUrl}`);
                     
-                    if (dateParts.length >= 3) {
-                        let sMonth, sDay, sYear;
-                        if (dateParts[0].length === 4) { // YYYY-MM-DD
-                            sYear = parseInt(dateParts[0].slice(-2), 10);
-                            sMonth = parseInt(dateParts[1], 10);
-                            sDay = parseInt(dateParts[2], 10);
-                        } else { // MM-DD-YY
-                            sMonth = parseInt(dateParts[0], 10);
-                            sDay = parseInt(dateParts[1], 10);
-                            sYear = parseInt(dateParts[2].slice(-2), 10);
-                        }
-                        return sMonth === targetDate.month && sDay === targetDate.day && sYear === targetDate.year;
-                    }
-                    return false;
-                });
-
-                if (matchedItem) {
-                    // Safe access extractor checks both object variations
-                    const videoId = typeof matchedItem.id === 'string' ? matchedItem.id : (matchedItem.video_id || matchedItem.id?.videoId);
-                    
-                    if (videoId) {
-                        const finalVideoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                        console.log(`[YT Engine] MATCH FOUND! Link: ${finalVideoUrl}`);
-                        
-                        watchBtn.href = finalVideoUrl;
-                        watchBtn.style.display = 'inline-block';
-                    } else {
-                        console.log("[YT Engine] Date matched an item, but couldn't isolate a valid string video ID property.");
-                    }
+                    watchBtn.href = videoUrl;
+                    watchBtn.style.display = 'inline-block';
                 } else {
-                    console.log("[YT Engine] No broadcast entries matched this document date stamp.");
+                    console.log(`[YT Engine] No tracking list links found registered under key value: "${targetKey}"`);
                 }
             } catch (err) {
-                console.warn('[YT Engine] Connection failed or syntax anomaly detected:', err);
+                console.warn('[YT Engine] Connection dropped or array layout parse mismatch:', err);
             }
         }
 
@@ -250,7 +230,9 @@
             viewerFrame.src = targetPdfUrl + '#view=Fit';
             openNewTabBtn.href = targetPdfUrl;
 
-            window.history.pushState(null, '', '/ows/' + urlSlug);
+            if (window.location.protocol !== 'file:') {
+                window.history.pushState(null, '', '/ows/' + urlSlug);
+            }
             matchYoutubeVideo(fileName);
         }
 
@@ -260,7 +242,7 @@
             let activeFile = null;
 
             try {
-                const response = await fetch://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
+                const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                 const files = await response.json();
 
                 if (Array.isArray(files)) {
