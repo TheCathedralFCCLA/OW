@@ -11,6 +11,14 @@
         </div>
         <object id="dynamic-ow-viewer" type="application/pdf" style="width:100%; height:100%; display:none;"></object>
     </div>
+
+    <!-- Dropdown Selector Container Below PDF -->
+    <div id="ow-selector-container" style="text-align:center; padding:15px; background:#f9f9f9; border-top:1px solid #eee; flex-shrink:0;">
+        <label for="ow-dropdown" style="font-weight:bold; margin-right:10px;">Select an Order of Worship:</label>
+        <select id="ow-dropdown" style="padding:8px 12px; font-size:16px; border-radius:4px; border:1px solid #ccc; max-width:100%;">
+            <option value="">Loading historical list...</option>
+        </select>
+    </div>
 </div>
 
 <script>
@@ -18,9 +26,11 @@
         const embedContainer = document.getElementById('ow-embed-container');
         const frameWrapper = document.getElementById('ow-frame-wrapper');
         const titleContainer = document.getElementById('ow-title-container');
+        const selectorContainer = document.getElementById('ow-selector-container');
         const viewerObject = document.getElementById('dynamic-ow-viewer');
         const statusDiv = document.getElementById('ow-loading-status');
         const dateHeader = document.getElementById('ow-dynamic-date');
+        const owDropdown = document.getElementById('ow-dropdown');
         
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
@@ -29,7 +39,9 @@
         function resizeViewer() {
             const windowHeight = window.innerHeight;
             const titleHeight = titleContainer.offsetHeight || 80;
-            const targetHeight = windowHeight - titleHeight - 40; 
+            const selectorHeight = selectorContainer.offsetHeight || 60;
+            // Deduct both header and footer dropdown containers to prevent scrolling issues
+            const targetHeight = windowHeight - titleHeight - selectorHeight - 20; 
             
             frameWrapper.style.height = targetHeight + 'px';
             embedContainer.style.height = windowHeight + 'px';
@@ -56,7 +68,6 @@
             return rawDateString.replace(/-/g, '/');
         }
 
-        // Extracts the date components from the beginning of a filename (e.g., "6.28.26")
         function parseDateParts(name) {
             const match = name.trim().split(/[\s_+]/)[0].split('.');
             return {
@@ -77,17 +88,29 @@
             });
         }
 
+        // Helper to update url and switch pdf details uniformly
+        function switchOW(fileName, cleanDatePart) {
+            const targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${fileName}`;
+            const finalDisplayDate = cleanDatePart.replace(/\./g, '/');
+            const urlSlug = cleanDatePart.replace(/\./g, '-');
+
+            dateHeader.innerText = finalDisplayDate;
+            viewerObject.data = targetPdfUrl + '#view=Fit';
+            
+            // Updates URL bar dynamically without refreshing page
+            window.history.pushState(null, '', '/ows/' + urlSlug);
+        }
+
         // Main Execution Engine
         async function loadViewer() {
             const savedDate = getOWCookie();
             const cacheBuster = `?cb=${new Date().getTime()}`;
-            let targetPdfUrl = '';
-            let finalDisplayDate = '';
+            let activeFile = null;
+            let activeCleanDate = '';
 
             if (savedDate) {
                 document.cookie = "targetOWDate=; max-age=0; path=/";
                 window.history.pushState(null, '', '/ows/' + savedDate);
-                finalDisplayDate = formatDisplayDate(savedDate);
             }
 
             try {
@@ -95,7 +118,6 @@
                 const files = await response.json();
 
                 if (Array.isArray(files)) {
-                    // Filters to ensure it is a PDF and starts with a numeric digit format
                     const pdfFiles = files.filter(file => {
                         const name = file.name.toLowerCase();
                         return name.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(name);
@@ -104,39 +126,48 @@
                     sortFilesChronologically(pdfFiles);
 
                     if (pdfFiles.length > 0) {
+                        // Populate Dropdown Menus
+                        owDropdown.innerHTML = '';
+                        pdfFiles.forEach(file => {
+                            const cleanDatePart = file.name.split(/[\s_+]/)[0];
+                            const labelDate = cleanDatePart.replace(/\./g, '/');
+                            const option = document.createElement('option');
+                            option.value = file.name;
+                            option.setAttribute('data-date', cleanDatePart);
+                            option.innerText = labelDate;
+                            owDropdown.appendChild(option);
+                        });
+
                         if (savedDate) {
-                            // OPTION A: Specific date requested via URL (e.g., fccla.org/ows/6-28-26)
                             const dateParts = savedDate.split('-');
                             const searchMonth = parseInt(dateParts[0], 10);
                             const searchDay = parseInt(dateParts[1], 10);
-                            const searchYear = parseInt(dateParts[2].slice(-2), 10); // handles '2026' or '26'
+                            const searchYear = parseInt(dateParts[2].slice(-2), 10);
 
-                            // Find a file whose numerical prefixes match the requested date components
                             const matchedFile = pdfFiles.find(file => {
                                 const fParts = parseDateParts(file.name);
                                 return fParts.month === searchMonth && fParts.day === searchDay && fParts.year === searchYear;
                             });
                             
                             if (matchedFile) {
-                                targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
+                                activeFile = matchedFile;
+                                activeCleanDate = matchedFile.name.split(/[\s_+]/)[0];
                             } else {
-                                // Graceful Fallback: Date not found -> use newest chronological file in /OWs
-                                targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
-                                const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
-                                finalDisplayDate = cleanDatePart.replace(/\./g, '/');
+                                activeFile = pdfFiles[0];
+                                activeCleanDate = pdfFiles[0].name.split(/[\s_+]/)[0];
                             }
                         } else {
-                            // OPTION B: Base page visited (fccla.org/ows) -> Grab the chronological newest file from /OWs folder
-                            targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
-                            const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
-                            finalDisplayDate = cleanDatePart.replace(/\./g, '/');
+                            activeFile = pdfFiles[0];
+                            activeCleanDate = pdfFiles[0].name.split(/[\s_+]/)[0];
                         }
+
+                        // Set current selection item in dropdown element UI matching active state
+                        owDropdown.value = activeFile.name;
                     }
                 }
 
-                if (targetPdfUrl) {
-                    dateHeader.innerText = finalDisplayDate;
-                    viewerObject.data = targetPdfUrl + '#view=Fit';
+                if (activeFile) {
+                    switchOW(activeFile.name, activeCleanDate);
                     
                     setTimeout(() => {
                         statusDiv.style.display = 'none';
@@ -146,6 +177,7 @@
                 } else {
                     dateHeader.innerText = "";
                     statusDiv.innerText = 'No Order of Worship documents found.';
+                    owDropdown.innerHTML = '<option value="">No archives available</option>';
                 }
 
             } catch (error) {
@@ -154,6 +186,28 @@
                 console.error(error);
             }
         }
+
+        // Attach Dropdown Event Handler Interaction Change Listener 
+        owDropdown.addEventListener('change', function(e) {
+            const selectedFileName = e.target.value;
+            if (!selectedFileName) return;
+
+            const selectedOption = e.target.options[e.target.selectedIndex];
+            const cleanDatePart = selectedOption.getAttribute('data-date');
+            
+            // Temporarily mask view while rendering swapping elements smoothly
+            viewerObject.style.display = 'none';
+            statusDiv.style.display = 'block';
+            statusDiv.innerText = 'Loading Selected OW Document...';
+
+            switchOW(selectedFileName, cleanDatePart);
+
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+                viewerObject.style.display = 'block';
+                resizeViewer();
+            }, 300);
+        });
 
         loadViewer();
     })();
