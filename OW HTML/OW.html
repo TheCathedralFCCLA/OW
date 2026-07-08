@@ -1,6 +1,6 @@
 <div id="ow-embed-container" style="width:100%; display:flex; flex-direction:column; margin:0; padding:0; overflow:hidden;">
     
-    <div id="ow-title-container" style="text-align:center; flex-shrink:0;">
+    <div id="ow-title-container" style="text-align:center; flex-shrink:0; padding-top:10px; padding-bottom:10px;">
         <h1>Order of Worship</h1>
         <h3 id="ow-dynamic-date">Loading Date...</h3>
     </div>
@@ -26,10 +26,33 @@
         const REPO = 'OW';
         const SUBFOLDER = 'OWs';
 
+        // MAGIC FIX: Finds Squarespace's bloated outer containers and shrinks their massive padding down to zero
+        function killSquarespaceWhitespace() {
+            const blockSection = embedContainer.closest('.sqs-block-code, .code-block, .page-section, .content-wrapper');
+            if (blockSection) {
+                blockSection.style.paddingTop = '0px';
+                blockSection.style.marginTop = '0px';
+            }
+            
+            // Aggressively hunt upward for the immediate main content wrappers
+            let parent = embedContainer.parentElement;
+            while (parent && parent.tagName !== 'BODY') {
+                if (parent.classList.contains('content-wrapper') || parent.classList.contains('sqs-layout')) {
+                    parent.style.paddingTop = '0px';
+                    parent.style.paddingBottom = '0px';
+                }
+                parent = parent.parentElement;
+            }
+        }
+
         function resizeViewer() {
+            killSquarespaceWhitespace(); // Collapse whitespace checks on every window resize frame
+            
             const windowHeight = window.innerHeight;
-            const titleHeight = titleContainer.offsetHeight || 80;
-            const targetHeight = windowHeight - titleHeight - 40; 
+            const titleHeight = titleContainer.offsetHeight || 60;
+            
+            // Dynamically lock container math to remaining visual space
+            const targetHeight = windowHeight - titleHeight - 20; 
             
             frameWrapper.style.height = targetHeight + 'px';
             embedContainer.style.height = windowHeight + 'px';
@@ -56,7 +79,6 @@
             return rawDateString.replace(/-/g, '/');
         }
 
-        // Extracts the date components from the beginning of a filename (e.g., "6.28.26")
         function parseDateParts(name) {
             const match = name.trim().split(/[\s_+]/)[0].split('.');
             return {
@@ -77,7 +99,6 @@
             });
         }
 
-        // Main Execution Engine
         async function loadViewer() {
             const savedDate = getOWCookie();
             const cacheBuster = `?cb=${new Date().getTime()}`;
@@ -95,7 +116,6 @@
                 const files = await response.json();
 
                 if (Array.isArray(files)) {
-                    // Filters to ensure it is a PDF and starts with a numeric digit format
                     const pdfFiles = files.filter(file => {
                         const name = file.name.toLowerCase();
                         return name.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(name);
@@ -105,13 +125,11 @@
 
                     if (pdfFiles.length > 0) {
                         if (savedDate) {
-                            // OPTION A: Specific date requested via URL (e.g., fccla.org/ows/6-28-26)
                             const dateParts = savedDate.split('-');
                             const searchMonth = parseInt(dateParts[0], 10);
                             const searchDay = parseInt(dateParts[1], 10);
-                            const searchYear = parseInt(dateParts[2].slice(-2), 10); // handles '2026' or '26'
+                            const searchYear = parseInt(dateParts[2].slice(-2), 10);
 
-                            // Find a file whose numerical prefixes match the requested date components
                             const matchedFile = pdfFiles.find(file => {
                                 const fParts = parseDateParts(file.name);
                                 return fParts.month === searchMonth && fParts.day === searchDay && fParts.year === searchYear;
@@ -120,13 +138,11 @@
                             if (matchedFile) {
                                 targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
                             } else {
-                                // Graceful Fallback: Date not found -> use newest chronological file in /OWs
                                 targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
                                 const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
                                 finalDisplayDate = cleanDatePart.replace(/\./g, '/');
                             }
                         } else {
-                            // OPTION B: Base page visited (fccla.org/ows) -> Grab the chronological newest file from /OWs folder
                             targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
                             const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
                             finalDisplayDate = cleanDatePart.replace(/\./g, '/');
@@ -141,7 +157,7 @@
                     setTimeout(() => {
                         statusDiv.style.display = 'none';
                         viewerObject.style.display = 'block';
-                        resizeViewer();
+                        resizeViewer(); // Recalculate heights once layout maps
                     }, 300);
                 } else {
                     dateHeader.innerText = "";
