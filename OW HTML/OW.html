@@ -104,7 +104,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -120,7 +119,6 @@
             </div>
         </div>
         
-        <!-- Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
     </div>
 
@@ -147,7 +145,6 @@
             return { month, day, year };
         }
 
-        // Helper to cleanly extract the plain filename from a complete URL link if needed
         function getFilenameFromEntry(entry) {
             if (entry.includes('/')) {
                 return entry.substring(entry.lastIndexOf('/') + 1);
@@ -189,7 +186,7 @@
             pdfNames.sort((a, b) => {
                 const parseDateParts = (entry) => {
                     const name = getFilenameFromEntry(entry);
-                    const parts = name.split(' ')[0].split('.');
+                    const parts = name.split(' ')[0].split(/[-.]/);
                     return normalizeDate(parts[0] || 0, parts[1] || 0, parts[2] || 0);
                 };
                 const dateA = parseDateParts(a);
@@ -203,7 +200,7 @@
 
         function extractDateFromFilename(filename) {
             const cleanPart = filename.split(/[\s_+]/)[0];
-            const parts = cleanPart.split('.');
+            const parts = cleanPart.split(/[-.]/);
             if (parts.length >= 3) {
                 return normalizeDate(parts[0], parts[1], parts[2]);
             }
@@ -240,7 +237,7 @@
 
         function switchOW(fileName, cleanDatePart) {
             const targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${fileName}`;
-            const urlSlug = cleanDatePart.replace(/\./g, '-');
+            const urlSlug = cleanDatePart.replace(/[.]/g, '-');
 
             statusBar.style.display = 'none';
             viewerFrame.src = targetPdfUrl + '#view=Fit';
@@ -273,10 +270,9 @@
                 }
 
                 if (Array.isArray(fileEntries)) {
-                    // Filters the entry strings safely whether they contain full URLs or clean file titles
                     const pdfFiles = fileEntries.filter(entry => {
                         const lower = entry.toLowerCase();
-                        return lower.endsWith('.pdf') && /\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/.test(lower);
+                        return lower.endsWith('.pdf') && /\b\d{1,2}[-.]\d{1,2}[-.]\d{2,4}\b/.test(lower);
                     });
                     
                     sortFilesChronologically(pdfFiles);
@@ -286,16 +282,20 @@
                         pdfFiles.forEach(entry => {
                             const filename = getFilenameFromEntry(entry);
                             const cleanDatePart = filename.split(/[\s_+]/)[0];
-                            const labelDate = cleanDatePart.replace(/\./g, '/');
+                            const labelDate = cleanDatePart.replace(/[-.]/g, '/');
                             const option = document.createElement('option');
-                            option.value = filename; // Stores the clean tracking filename value
+                            option.value = filename; 
                             option.setAttribute('data-date', cleanDatePart);
                             option.innerText = labelDate;
                             owDropdown.appendChild(option);
                         });
 
                         if (pathTargetFilename) {
-                            const match = pdfFiles.find(entry => getFilenameFromEntry(entry).toLowerCase() === pathTargetFilename.toLowerCase());
+                            const match = pdfFiles.find(entry => {
+                                const f1 = getFilenameFromEntry(entry).toLowerCase().replace(/[-]/g, '.');
+                                const f2 = pathTargetFilename.toLowerCase().replace(/[-]/g, '.');
+                                return f1 === f2;
+                            });
                             activeFile = match ? getFilenameFromEntry(match) : getFilenameFromEntry(pdfFiles[0]);
                         } else {
                             activeFile = getFilenameFromEntry(pdfFiles[0]);
