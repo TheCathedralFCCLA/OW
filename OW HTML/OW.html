@@ -9,7 +9,7 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden;
+            overflow: hidden; /* Prevents double page scrollbars on live site */
             background-color: #f9f9f9;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
@@ -94,7 +94,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Title and Dropdown Layout Area -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -106,10 +105,8 @@
             <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
         </div>
         
-        <!-- Interactive PDF viewer -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
 
-        <!-- Bottom Actions -->
         <div id="bottom-bar">
             <a id="open-new-tab-btn" class="btn" target="_blank">Open PDF in New Tab</a>
         </div>
@@ -184,24 +181,29 @@
             return null;
         }
 
-        // Cross-references the selected PDF file's date with your playlist JSON log parameters
+        // Cross-references the open file parameters with playlist telemetry logs
         async function matchYoutubeVideo(pdfFilename) {
-            watchBtn.style.display = 'none'; // Hide by default while checking
+            watchBtn.style.display = 'none'; 
             const targetDate = extractDateFromFilename(pdfFilename);
             if (!targetDate) return;
+
+            console.log(`[YT Engine] Searching match for PDF Date: ${targetDate.month}/${targetDate.day}/${targetDate.year}`);
 
             try {
                 const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
                 
-                const itemsList = data.items || (Array.isArray(data) ? data : []);
+                console.log("[YT Engine] Playlist JSON payload fetched successfully:", data);
+                
+                // Inspects both native flat arrays and standard payload envelopes
+                const itemsList = Array.isArray(data) ? data : (data.items || []);
                 
                 const matchedItem = itemsList.find(item => {
                     const timeString = item.scheduledStartTime || item.publishedAt || (item.snippet ? item.snippet.publishedAt : null);
                     if (!timeString) return false;
 
-                    const rawDatePart = timeString.split('T')[0]; 
-                    const dateParts = rawDatePart.split(/[-/.]/);
+                    const rawDatePart = timeString.split('T')[0]; // "2026-07-05"
+                    const dateParts = rawDatePart.split('-');
                     
                     if (dateParts.length >= 3) {
                         let sMonth, sDay, sYear;
@@ -220,14 +222,23 @@
                 });
 
                 if (matchedItem) {
-                    const videoId = matchedItem.video_id || matchedItem.id?.videoId || (typeof matchedItem.id === 'string' ? matchedItem.id : null);
+                    // Safe access extractor checks both object variations
+                    const videoId = typeof matchedItem.id === 'string' ? matchedItem.id : (matchedItem.video_id || matchedItem.id?.videoId);
+                    
                     if (videoId) {
-                        watchBtn.href = `https://www.youtube.com/watch?v=${videoId}`;
+                        const finalVideoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                        console.log(`[YT Engine] MATCH FOUND! Link: ${finalVideoUrl}`);
+                        
+                        watchBtn.href = finalVideoUrl;
                         watchBtn.style.display = 'inline-block';
+                    } else {
+                        console.log("[YT Engine] Date matched an item, but couldn't isolate a valid string video ID property.");
                     }
+                } else {
+                    console.log("[YT Engine] No broadcast entries matched this document date stamp.");
                 }
             } catch (err) {
-                console.warn('YouTube cross-reference matching bypassed:', err);
+                console.warn('[YT Engine] Connection failed or syntax anomaly detected:', err);
             }
         }
 
@@ -239,10 +250,7 @@
             viewerFrame.src = targetPdfUrl + '#view=Fit';
             openNewTabBtn.href = targetPdfUrl;
 
-            // Instantly sync the address bar URL without forcing an expensive window reload loop
             window.history.pushState(null, '', '/ows/' + urlSlug);
-
-            // Run the async lookup engine to catch matching live streams
             matchYoutubeVideo(fileName);
         }
 
@@ -252,8 +260,7 @@
             let activeFile = null;
 
             try {
-                // Fetch the definitive collection of items from the subfolder path
-                const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
+                const response = await fetch://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
                 const files = await response.json();
 
                 if (Array.isArray(files)) {
@@ -265,7 +272,6 @@
                     sortFilesChronologically(pdfFiles);
 
                     if (pdfFiles.length > 0) {
-                        // Re-render and rebuild option element arrays cleanly
                         owDropdown.innerHTML = '';
                         pdfFiles.forEach(file => {
                             const cleanDatePart = file.name.split(/[\s_+]/)[0];
@@ -277,7 +283,6 @@
                             owDropdown.appendChild(option);
                         });
 
-                        // Set default selected option match criteria based on entry routes
                         if (pathTargetFilename) {
                             const match = pdfFiles.find(file => file.name.toLowerCase() === pathTargetFilename.toLowerCase());
                             activeFile = match || pdfFiles[0];
@@ -303,7 +308,6 @@
             }
         }
 
-        // Handle selections chosen via manual interaction down the dropdown matrix chain
         owDropdown.addEventListener('change', function(e) {
             const selectedFileName = e.target.value;
             if (!selectedFileName) return;
