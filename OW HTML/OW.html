@@ -8,8 +8,10 @@
             margin: 0;
             padding: 0;
             width: 100%;
-            height: 100%;
-            overflow: hidden;
+            /* CHANGED: Allow the page document to scroll vertically down naturally */
+            height: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
             background-color: #f9f9f9;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
@@ -17,7 +19,7 @@
             display: flex;
             flex-direction: column;
             width: 100%;
-            height: 100%;
+            height: auto;
         }
         #top-bar {
             display: flex;
@@ -79,16 +81,24 @@
         }
         iframe {
             width: 100%;
-            flex-grow: 1;
+            /* CHANGED: Give the PDF viewer an explicit height so it takes up layout room */
+            height: 900px;
             border: none;
             margin: 0;
             padding: 0;
         }
         #bottom-bar {
-            padding: 10px;
+            padding: 15px 10px;
             background: #fff;
             border-top: 1px solid #eee;
             text-align: center;
+        }
+        
+        /* Mobile adjustment to shrink layout scale comfortably */
+        @media (max-width: 767px) {
+            iframe {
+                height: 650px;
+            }
         }
     </style>
 </head>
@@ -124,7 +134,6 @@
         const openNewTabBtn = document.getElementById('open-new-tab-btn');
         const owDropdown = document.getElementById('ow-dropdown');
 
-        // Normalizes variations into standardized numeric component models
         function normalizeDate(m, d, y) {
             let month = parseInt(m, 10);
             let day = parseInt(d, 10);
@@ -134,7 +143,6 @@
             return { month, day, year };
         }
 
-        // Handles both live Squarespace paths and local file system query strings (?date=7-5-26)
         function getTargetFilenameFromPath() {
             let dateSlug = null;
 
@@ -189,13 +197,11 @@
             return null;
         }
 
-        // Cross-references the open file parameters with key-value playlist map dictionary entries
         async function matchYoutubeVideo(pdfFilename) {
             watchBtn.style.display = 'none'; 
             const targetDate = extractDateFromFilename(pdfFilename);
             if (!targetDate) return;
 
-            // Generate the string format matching dictionary keys (e.g. 20260705)
             const pad = (num) => String(num).padStart(2, '0');
             const targetKey = `20${pad(targetDate.year)}${pad(targetDate.month)}${pad(targetDate.day)}`;
 
@@ -207,7 +213,6 @@
                 
                 console.log("[YT Engine] Playlist Dictionary lookup database loaded successfully.");
                 
-                // Direct fast key lookup extraction inside dictionary payload
                 if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
                     const videoUrl = data[targetKey][0];
                     console.log(`[YT Engine] MATCH FOUND IN MAP MATRIX! Live URL string path: ${videoUrl}`);
