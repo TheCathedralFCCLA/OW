@@ -1,5 +1,5 @@
 <style>
-    /* Force Squarespace's container row elements to collapse their padding blocks to 0 */
+    /* Force Squarespace's row layout containers to collapse padding blocks */
     .page-section, 
     .content-wrapper, 
     .sqs-layout, 
@@ -12,22 +12,28 @@
         margin-bottom: 0 !important;
     }
 
-    /* Sets up a clean, non-breaking flex framework locked strictly to standard desktop display views */
+    /* Outer layout container */
     .ow-master-grid {
         display: flex;
         flex-direction: column;
         width: 100%;
-        /* 800px serves as a safe maximum vertical container block size that leaves a buffer for footers across displays */
-        height: 800px; 
+        height: 780px; /* Snug vertical size to prevent footer bleeding */
         margin: 0 auto;
         padding: 0;
         box-sizing: border-box;
     }
 
-    .ow-title-block {
+    /* FIXED: Explicitly kills the browser's default top margins on headers */
+    .ow-title-block h1 {
+        margin: 0 !important;
+        padding: 0 !important;
         text-align: center;
-        padding: 5px 0;
-        margin: 0;
+    }
+
+    .ow-title-block h3 {
+        margin: 5px 0 0 0 !important; /* Tiny 5px gap between title and date, 0px on top/bottom */
+        padding: 0 !important;
+        text-align: center;
     }
 
     .ow-viewer-wrapper {
@@ -38,10 +44,9 @@
         min-height: 0;
     }
 
-    /* Responsive mobile viewport configuration adjustments */
     @media (max-width: 767px) {
         .ow-master-grid {
-            height: 600px;
+            height: 580px;
         }
     }
 </style>
@@ -49,7 +54,7 @@
 <div class="ow-master-grid" id="ow-embed-container">
     <div class="ow-title-block" id="ow-title-container">
         <h1>Order of Worship</h1>
-        <h3 id="ow-dynamic-date" style="margin-top: 2px;">Loading Date...</h3>
+        <h3 id="ow-dynamic-date">Loading Date...</h3>
     </div>
 
     <div class="ow-viewer-wrapper">
@@ -163,7 +168,6 @@
                     dateHeader.innerText = finalDisplayDate;
                     viewerObject.data = targetPdfUrl + '#view=Fit';
                     
-                    // Reveal the layout directly
                     statusDiv.style.display = 'none';
                     viewerObject.style.display = 'block';
                 } else {
