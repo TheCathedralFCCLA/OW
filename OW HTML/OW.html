@@ -1,69 +1,23 @@
-<style>
-    /* Force Squarespace's row layout containers to collapse padding blocks */
-    .page-section, 
-    .content-wrapper, 
-    .sqs-layout, 
-    .sqs-block-code,
-    #dynamic-ow-container,
-    #dynamic-ow-container > div {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-    }
-
-    /* Outer layout container now obeys Squarespace block height strictly instead of overflowing */
-    .ow-master-grid {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        height: 100%; 
-        margin: 0 auto;
-        padding: 0;
-        box-sizing: border-box;
-        
-        /* ADJUSTMENT: Negative margin pulls the entire layout block up past standard limits */
-        margin-top: -40px !important; 
-    }
-
-    /* Zeroes out header spacing and tightens text grouping */
-    .ow-title-block h1 {
-        margin: 0 !important;
-        padding: 0 !important;
-        text-align: center;
-    }
-
-    .ow-title-block h3 {
-        margin: 2px 0 10px 0 !important; 
-        padding: 0 !important;
-        text-align: center;
-    }
-
-    .ow-viewer-wrapper {
-        position: relative;
-        width: 100%;
-        flex-grow: 1;
-        height: 100%;
-        min-height: 0;
-    }
-</style>
-
-<div class="ow-master-grid" id="ow-embed-container">
-    <div class="ow-title-block" id="ow-title-container">
+<div id="ow-embed-container" style="width:100%; display:flex; flex-direction:column; margin:0; padding:0; overflow:hidden;">
+    
+    <div id="ow-title-container" style="text-align:center; flex-shrink:0;">
         <h1>Order of Worship</h1>
         <h3 id="ow-dynamic-date">Loading Date...</h3>
     </div>
 
-    <div class="ow-viewer-wrapper">
+    <div id="ow-frame-wrapper" style="position:relative; width:100%; min-height:0; flex-grow:1;">
         <div id="ow-loading-status" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
             Loading OW Document Viewer...
         </div>
-        <object id="dynamic-ow-viewer" type="application/pdf" style="width:100%; height:100%;" data=""></object>
+        <object id="dynamic-ow-viewer" type="application/pdf" style="width:100%; height:100%; display:none;"></object>
     </div>
 </div>
 
 <script>
     (function() {
+        const embedContainer = document.getElementById('ow-embed-container');
+        const frameWrapper = document.getElementById('ow-frame-wrapper');
+        const titleContainer = document.getElementById('ow-title-container');
         const viewerObject = document.getElementById('dynamic-ow-viewer');
         const statusDiv = document.getElementById('ow-loading-status');
         const dateHeader = document.getElementById('ow-dynamic-date');
@@ -71,6 +25,18 @@
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
         const SUBFOLDER = 'OWs';
+
+        function resizeViewer() {
+            const windowHeight = window.innerHeight;
+            const titleHeight = titleContainer.offsetHeight || 80;
+            const targetHeight = windowHeight - titleHeight - 40; 
+            
+            frameWrapper.style.height = targetHeight + 'px';
+            embedContainer.style.height = windowHeight + 'px';
+        }
+
+        resizeViewer();
+        window.addEventListener('resize', resizeViewer);
 
         function getOWCookie() {
             const name = "targetOWDate=";
@@ -90,6 +56,7 @@
             return rawDateString.replace(/-/g, '/');
         }
 
+        // Extracts the date components from the beginning of a filename (e.g., "6.28.26")
         function parseDateParts(name) {
             const match = name.trim().split(/[\s_+]/)[0].split('.');
             return {
@@ -110,6 +77,7 @@
             });
         }
 
+        // Main Execution Engine
         async function loadViewer() {
             const savedDate = getOWCookie();
             const cacheBuster = `?cb=${new Date().getTime()}`;
@@ -127,6 +95,7 @@
                 const files = await response.json();
 
                 if (Array.isArray(files)) {
+                    // Filters to ensure it is a PDF and starts with a numeric digit format
                     const pdfFiles = files.filter(file => {
                         const name = file.name.toLowerCase();
                         return name.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(name);
@@ -136,11 +105,13 @@
 
                     if (pdfFiles.length > 0) {
                         if (savedDate) {
+                            // OPTION A: Specific date requested via URL (e.g., fccla.org/ows/6-28-26)
                             const dateParts = savedDate.split('-');
                             const searchMonth = parseInt(dateParts[0], 10);
                             const searchDay = parseInt(dateParts[1], 10);
-                            const searchYear = parseInt(dateParts[2].slice(-2), 10);
+                            const searchYear = parseInt(dateParts[2].slice(-2), 10); // handles '2026' or '26'
 
+                            // Find a file whose numerical prefixes match the requested date components
                             const matchedFile = pdfFiles.find(file => {
                                 const fParts = parseDateParts(file.name);
                                 return fParts.month === searchMonth && fParts.day === searchDay && fParts.year === searchYear;
@@ -149,11 +120,13 @@
                             if (matchedFile) {
                                 targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
                             } else {
+                                // Graceful Fallback: Date not found -> use newest chronological file in /OWs
                                 targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
                                 const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
                                 finalDisplayDate = cleanDatePart.replace(/\./g, '/');
                             }
                         } else {
+                            // OPTION B: Base page visited (fccla.org/ows) -> Grab the chronological newest file from /OWs folder
                             targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${pdfFiles[0].name}`;
                             const cleanDatePart = pdfFiles[0].name.split(/[\s_+]/)[0];
                             finalDisplayDate = cleanDatePart.replace(/\./g, '/');
@@ -165,8 +138,11 @@
                     dateHeader.innerText = finalDisplayDate;
                     viewerObject.data = targetPdfUrl + '#view=Fit';
                     
-                    statusDiv.style.display = 'none';
-                    viewerObject.style.display = 'block';
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                        viewerObject.style.display = 'block';
+                        resizeViewer();
+                    }, 300);
                 } else {
                     dateHeader.innerText = "";
                     statusDiv.innerText = 'No Order of Worship documents found.';
