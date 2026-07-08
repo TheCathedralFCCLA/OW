@@ -12,18 +12,21 @@
         margin-bottom: 0 !important;
     }
 
-    /* Outer layout container */
+    /* Outer layout container now obeys Squarespace block height strictly instead of overflowing */
     .ow-master-grid {
         display: flex;
         flex-direction: column;
         width: 100%;
-        height: 780px; /* Snug vertical size to prevent footer bleeding */
+        height: 100%; 
         margin: 0 auto;
         padding: 0;
         box-sizing: border-box;
+        
+        /* ADJUSTMENT: Negative margin pulls the entire layout block up past standard limits */
+        margin-top: -40px !important; 
     }
 
-    /* FIXED: Explicitly kills the browser's default top margins on headers */
+    /* Zeroes out header spacing and tightens text grouping */
     .ow-title-block h1 {
         margin: 0 !important;
         padding: 0 !important;
@@ -31,7 +34,7 @@
     }
 
     .ow-title-block h3 {
-        margin: 5px 0 0 0 !important; /* Tiny 5px gap between title and date, 0px on top/bottom */
+        margin: 2px 0 10px 0 !important; 
         padding: 0 !important;
         text-align: center;
     }
@@ -42,12 +45,6 @@
         flex-grow: 1;
         height: 100%;
         min-height: 0;
-    }
-
-    @media (max-width: 767px) {
-        .ow-master-grid {
-            height: 580px;
-        }
     }
 </style>
 
