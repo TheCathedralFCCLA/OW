@@ -19,8 +19,6 @@
             width: 100%;
             padding-bottom: 60px !important; 
             box-sizing: border-box;
-            
-            /* FIXED: Explicitly layer above background layouts but beneath the main global header/footer tracks */
             position: relative;
             z-index: 1;
         }
@@ -56,6 +54,13 @@
             color: #666;
             font-size: 14px;
         }
+        .ow-actions-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
         .btn {
             display: inline-block;
             padding: 6px 14px;
@@ -89,12 +94,6 @@
             margin: 0;
             padding: 0;
         }
-        #bottom-bar {
-            padding: 20px 10px;
-            background: #fff;
-            border-top: 1px solid #eee;
-            text-align: center;
-        }
         
         @media (max-width: 767px) {
             iframe {
@@ -114,16 +113,16 @@
                 </select>
             </div>
             <div id="status-bar" style="display: none;">Loading document framework...</div>
-            <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
+            
+            <!-- Swapped: "Watch Service" on left, "Open OW" on right -->
+            <div class="ow-actions-wrapper">
+                <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
+                <a id="open-new-tab-btn" class="btn" target="_blank">Open OW in New Tab</a>
+            </div>
         </div>
         
         <!-- Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
-
-        <!-- Bottom Actions Footer Block -->
-        <div id="bottom-bar">
-            <a id="open-new-tab-btn" class="btn" target="_blank">Open PDF in New Tab</a>
-        </div>
     </div>
 
     <script>
@@ -188,7 +187,7 @@
                 const dateA = parseDateParts(a);
                 const dateB = parseDateParts(b);
 
-                if (dateA.year !== dateB.year) return dateB.year - year - dateB.year - dateA.year;
+                if (dateA.year !== dateB.year) return dateB.year - dateA.year;
                 if (dateA.month !== dateB.month) return dateB.month - dateA.month;
                 return dateB.day - dateA.day;
             });
