@@ -145,11 +145,18 @@
             return { month, day, year };
         }
 
-        function getFilenameFromEntry(entry) {
+        // Extracts the raw date slug segment from a clean absolute URL entry path
+        function getSlugFromEntry(entry) {
             if (entry.includes('/')) {
                 return entry.substring(entry.lastIndexOf('/') + 1);
             }
             return entry;
+        }
+
+        // Reconstructs the actual file path string needed by the iframe canvas asset loader
+        function convertSlugToFilename(slug) {
+            const dots = slug.replace(/[-]/g, '.');
+            return `${dots} ow.pdf`;
         }
 
         function getTargetFilenameFromPath() {
@@ -182,11 +189,11 @@
             return null; 
         }
 
-        function sortFilesChronologically(pdfNames) {
-            pdfNames.sort((a, b) => {
+        function sortFilesChronologically(slugNames) {
+            slugNames.sort((a, b) => {
                 const parseDateParts = (entry) => {
-                    const name = getFilenameFromEntry(entry);
-                    const parts = name.split(' ')[0].split(/[-.]/);
+                    const slug = getSlugFromEntry(entry);
+                    const parts = slug.split('-');
                     return normalizeDate(parts[0] || 0, parts[1] || 0, parts[2] || 0);
                 };
                 const dateA = parseDateParts(a);
@@ -253,52 +260,49 @@
             const pathTargetFilename = getTargetFilenameFromPath();
             const cacheBuster = `?cb=${new Date().getTime()}`;
             let activeFile = null;
-            let fileEntries = [];
+            let dataEntries = [];
 
             try {
                 if (window.location.protocol === 'file:') {
-                    console.log("[Directory Engine] Local session routing detected. Querying via open GitHub API tracking routes to prevent local CORS exceptions...");
+                    console.log("[Directory Engine] Local session routing detected. Querying via open GitHub API tracking routes...");
                     const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`);
                     const apiData = await response.json();
                     if (Array.isArray(apiData)) {
-                        fileEntries = apiData.map(item => item.name);
+                        // Normalize API layout text paths straight to slugs to keep execution uniform
+                        dataEntries = apiData
+                            .filter(item => item.name.toLowerCase().endsWith('.pdf'))
+                            .map(item => item.name.toLowerCase().replace(" ow.pdf", "").replace(/\./g, "-"));
                     }
                 } else {
                     console.log("[Directory Engine] Live hosted web cluster detected. Routing lookup data through static index pipelines...");
                     const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`);
-                    fileEntries = await response.json();
+                    const jsonSlugs = await response.json();
+                    if (Array.isArray(jsonSlugs)) {
+                        dataEntries = jsonSlugs.map(url => getSlugFromEntry(url));
+                    }
                 }
 
-                if (Array.isArray(fileEntries)) {
-                    const pdfFiles = fileEntries.filter(entry => {
-                        const lower = entry.toLowerCase();
-                        return lower.endsWith('.pdf') && /\b\d{1,2}[-.]\d{1,2}[-.]\d{2,4}\b/.test(lower);
-                    });
-                    
-                    sortFilesChronologically(pdfFiles);
+                if (Array.isArray(dataEntries)) {
+                    sortFilesChronologically(dataEntries);
 
-                    if (pdfFiles.length > 0) {
+                    if (dataEntries.length > 0) {
                         owDropdown.innerHTML = '';
-                        pdfFiles.forEach(entry => {
-                            const filename = getFilenameFromEntry(entry);
-                            const cleanDatePart = filename.split(/[\s_+]/)[0];
-                            const labelDate = cleanDatePart.replace(/[-.]/g, '/');
+                        dataEntries.forEach(slug => {
+                            const labelDate = slug.replace(/[-]/g, '/');
+                            const filename = convertSlugToFilename(slug);
                             const option = document.createElement('option');
                             option.value = filename; 
-                            option.setAttribute('data-date', cleanDatePart);
+                            option.setAttribute('data-date', slug);
                             option.innerText = labelDate;
                             owDropdown.appendChild(option);
                         });
 
                         if (pathTargetFilename) {
-                            const match = pdfFiles.find(entry => {
-                                const f1 = getFilenameFromEntry(entry).toLowerCase().replace(/[-]/g, '.');
-                                const f2 = pathTargetFilename.toLowerCase().replace(/[-]/g, '.');
-                                return f1 === f2;
-                            });
-                            activeFile = match ? getFilenameFromEntry(match) : getFilenameFromEntry(pdfFiles[0]);
+                            const targetNormalized = pathTargetFilename.toLowerCase().replace(/[-]/g, '.');
+                            const match = dataEntries.find(slug => convertSlugToFilename(slug).toLowerCase() === targetNormalized);
+                            activeFile = match ? convertSlugToFilename(match) : convertSlugToFilename(dataEntries[0]);
                         } else {
-                            activeFile = getFilenameFromEntry(pdfFiles[0]);
+                            activeFile = convertSlugToFilename(dataEntries[0]);
                         }
 
                         owDropdown.value = activeFile;

@@ -24,10 +24,12 @@ jobs:
         cd OWs
         echo "Scanning files inside the /OWs directory..."
         
-        # FIXED: Lists files, filters for PDFs, and programmatically appends your direct GitHub Pages link schema to each file entry
-        ls -1 | grep -i '\.pdf$' | jq -R --arg base "https://TheCathedralFCCLA.github.io/OW/OWs/" '$base + .' | jq -s . > index.json
+        # FIXED: Lists files, filters for PDFs, converts dots to dashes, strips " ow.pdf" extension, and appends base URL
+        ls -1 | grep -i '\.pdf$' | jq -R --arg base "https://TheCathedralFCCLA.github.io/OW/OWs/" '
+          gsub(" (?i)ow\\.pdf$"; "") | gsub("\\."; "-") | $base + .
+        ' | jq -s . > index.json
         
-        echo "Index file tracking grid compiled successfully with absolute web URLs:"
+        echo "Index file tracking grid compiled successfully with clean URLs:"
         cat index.json
 
     - name: Commit and Sync Directory Manifest to Main Track
