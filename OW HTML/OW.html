@@ -104,7 +104,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -120,7 +119,6 @@
             </div>
         </div>
         
-        <!-- Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
     </div>
 
@@ -139,28 +137,14 @@
         const openNewTabBtn = document.getElementById('open-new-tab-btn');
         const owDropdown = document.getElementById('ow-dropdown');
 
-        // Storage map to link a clean normalized key string to its literal file title
-        let fileMapRegistry = {};
+        let masterDatabase = {};
 
         function normalizeDate(m, d, y) {
             let month = parseInt(m, 10);
             let day = parseInt(d, 10);
             let year = parseInt(y, 10);
             if (year > 1000) year = year % 100;
-            return { month, day, year };
-        }
-
-        // Strict Regex to capture ONLY the leading date values, disregarding tail text completely
-        function extractCleanDateKey(filename) {
-            if (filename.includes('/')) {
-                filename = filename.substring(filename.lastIndexOf('/') + 1);
-            }
-            const match = filename.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
-            if (match) {
-                const norm = normalizeDate(match[1], match[2], match[3]);
-                return `${norm.month}-${norm.day}-${norm.year}`;
-            }
-            return null;
+            return `${month}-${day}-${year}`;
         }
 
         function getTargetDateKeyFromPath() {
@@ -182,19 +166,17 @@
             }
 
             if (!dateSlug) return null;
-            return extractCleanDateKey(dateSlug);
+            const match = dateSlug.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
+            return match ? normalizeDate(match[1], match[2], match[3]) : null;
         }
 
-        function sortDateKeysChronologically(keys) {
+        function sortKeysChronologically(keys) {
             keys.sort((a, b) => {
-                const pA = a.split('-');
-                const pB = b.split('-');
-                const dA = normalizeDate(pA[0], pA[1], pA[2]);
-                const dB = normalizeDate(pB[0], pB[1], pB[2]);
-
-                if (dA.year !== dB.year) return dB.year - dA.year;
-                if (dA.month !== dB.month) return dB.month - dA.month;
-                return dB.day - dA.day;
+                const pA = a.split('-').map(Number);
+                const pB = b.split('-').map(Number);
+                if (pA[2] !== pB[2]) return pB[2] - pA[2];
+                if (pA[0] !== pB[0]) return pB[0] - pA[0];
+                return pB[1] - pA[1];
             });
         }
 
@@ -202,121 +184,106 @@
             watchBtn.style.display = 'none'; 
             if (!dateKey) return;
 
-            const parts = dateKey.split('-');
-            const targetDate = normalizeDate(parts[0], parts[1], parts[2]);
-
+            const parts = dateKey.split('-').map(Number);
             const pad = (num) => String(num).padStart(2, '0');
-            const targetKey = `20${pad(targetDate.year)}${pad(targetDate.month)}${pad(targetDate.day)}`;
-
-            console.log(`[YT Engine] Target Key generated for lookup query: "${targetKey}"`);
+            const targetKey = `20${pad(parts[2])}${pad(parts[0])}${pad(parts[1])}`;
 
             try {
                 const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
                 
                 if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
-                    const videoUrl = data[targetKey][0];
-                    console.log(`[YT Engine] MATCH FOUND IN MAP MATRIX! Live URL string path: ${videoUrl}`);
-                    
-                    watchBtn.href = videoUrl;
+                    watchBtn.href = data[targetKey][0];
                     watchBtn.style.display = 'inline-block';
-                } else {
-                    console.log(`[YT Engine] No tracking list links found registered under key value: "${targetKey}"`);
                 }
             } catch (err) {
-                console.warn('[YT Engine] Connection dropped or array layout parse mismatch:', err);
+                console.warn('[YT Engine] Connection error loading mapping keys:', err);
             }
         }
 
-        function switchOW(literalFileName, cleanDateKey) {
-            const targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${literalFileName}`;
-            
+        function switchOW(dateKey) {
+            const fileData = masterDatabase[dateKey];
+            if (!fileData) return;
+
             statusBar.style.display = 'none';
-            viewerFrame.src = targetPdfUrl + '#view=Fit';
-            openNewTabBtn.href = targetPdfUrl;
+            viewerFrame.src = fileData.url + '#view=Fit';
+            openNewTabBtn.href = fileData.url;
 
             if (window.location.protocol !== 'file:') {
-                window.history.pushState(null, '', '/ows/' + cleanDateKey);
+                window.history.pushState(null, '', '/ows/' + dateKey);
             }
-            matchYoutubeVideo(cleanDateKey);
+            matchYoutubeVideo(dateKey);
         }
 
         async function loadViewer() {
             const pathTargetKey = getTargetDateKeyFromPath();
             const cacheBuster = `?cb=${new Date().getTime()}`;
             let activeKey = null;
-            let rawEntries = [];
 
             try {
                 if (window.location.protocol === 'file:') {
-                    console.log("[Directory Engine] Local session routing detected. Querying via open GitHub API tracking routes...");
+                    console.log("[Directory Engine] Local mode: query live API.");
                     const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`);
                     const apiData = await response.json();
                     if (Array.isArray(apiData)) {
-                        rawEntries = apiData.map(item => item.name);
+                        apiData.forEach(item => {
+                            const name = item.name;
+                            const match = name.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
+                            if (match && name.toLowerCase().endsWith('.pdf')) {
+                                const k = normalizeDate(match[1], match[2], match[3]);
+                                masterDatabase[k] = {
+                                    filename: name,
+                                    url: `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${encodeURIComponent(name)}`,
+                                    display_date: k.replace(/-/g, '/')
+                                };
+                            }
+                        });
                     }
                 } else {
-                    console.log("[Directory Engine] Live hosted web cluster detected. Querying static index index pipelines...");
+                    console.log("[Directory Engine] Production mode: loading static database dictionary.");
                     const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`);
-                    rawEntries = await response.json();
+                    masterDatabase = await response.json();
                 }
 
-                if (Array.isArray(rawEntries)) {
-                    // Populate our dictionary map registry to cross-reference clean date keys to their weird original names
-                    rawEntries.forEach(entry => {
-                        const cleanKey = extractCleanDateKey(entry);
-                        if (cleanKey) {
-                            // If it is a full URL from index.json, pluck the final portion out
-                            if (entry.includes('/')) {
-                                fileMapRegistry[cleanKey] = entry.substring(entry.lastIndexOf('/') + 1);
-                            } else {
-                                fileMapRegistry[cleanKey] = entry;
-                            }
-                        }
+                const sortedKeys = Object.keys(masterDatabase);
+                sortKeysChronologically(sortedKeys);
+
+                if (sortedKeys.length > 0) {
+                    owDropdown.innerHTML = '';
+                    sortedKeys.forEach(key => {
+                        const option = document.createElement('option');
+                        option.value = key; 
+                        option.innerText = masterDatabase[key].display_date;
+                        owDropdown.appendChild(option);
                     });
 
-                    // Build list of tracking keys and sort them chronologically
-                    const sortedKeys = Object.keys(fileMapRegistry);
-                    sortDateKeysChronologically(sortedKeys);
-
-                    if (sortedKeys.length > 0) {
-                        owDropdown.innerHTML = '';
-                        sortedKeys.forEach(key => {
-                            const labelDate = key.replace(/[-]/g, '/');
-                            const option = document.createElement('option');
-                            option.value = key; // Value matches clean key string layout
-                            option.innerText = labelDate;
-                            owDropdown.appendChild(option);
-                        });
-
-                        if (pathTargetKey && fileMapRegistry[pathTargetKey]) {
-                            activeKey = pathTargetKey;
-                        } else {
-                            activeKey = sortedKeys[0];
-                        }
-
-                        owDropdown.value = activeKey;
+                    if (pathTargetKey && masterDatabase[pathTargetKey]) {
+                        activeKey = pathTargetKey;
+                    } else {
+                        activeKey = sortedKeys[0];
                     }
+
+                    owDropdown.value = activeKey;
                 }
 
-                if (activeKey && fileMapRegistry[activeKey]) {
-                    switchOW(fileMapRegistry[activeKey], activeKey);
+                if (activeKey && masterDatabase[activeKey]) {
+                    switchOW(activeKey);
                 } else {
                     statusBar.innerText = 'No documents found.';
                     owDropdown.innerHTML = '<option value="">No archives available</option>';
                 }
 
             } catch (error) {
-                statusBar.innerText = 'Error loading document tracking directory list.';
+                statusBar.innerText = 'Error loading unified tracking matrix database layers.';
                 console.error(error);
             }
         }
 
         owDropdown.addEventListener('change', function(e) {
             const selectedKey = e.target.value;
-            if (!selectedKey || !fileMapRegistry[selectedKey]) return;
-            
-            switchOW(fileMapRegistry[selectedKey], selectedKey);
+            if (selectedKey && masterDatabase[selectedKey]) {
+                switchOW(selectedKey);
+            }
         });
 
         loadViewer();

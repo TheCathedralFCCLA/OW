@@ -19,17 +19,30 @@ jobs:
     - name: Checkout Repository Code Layers
       uses: actions/checkout@v4
 
-    - name: Scan Directory and Build Static File Matrix
+    - name: Scan Directory and Build Comprehensive JSON Database
       run: |
         cd OWs
         echo "Scanning files inside the /OWs directory..."
         
-        # FIXED: Lists files, filters for PDFs, converts dots to dashes, strips " ow.pdf" extension, and appends base URL
-        ls -1 | grep -i '\.pdf$' | jq -R --arg base "https://TheCathedralFCCLA.github.io/OW/OWs/" '
-          gsub(" (?i)ow\\.pdf$"; "") | gsub("\\."; "-") | $base + .
-        ' | jq -s . > index.json
+        # Compiles an advanced key-value relational map of dates to filenames and absolute URLs
+        ls -1 | grep -i '\.pdf$' | jq -R -s '
+          split("\n") | map(select(length > 0)) | map(
+            capture("^(?<m>[0-9]{1,2})[-.](?<d>[0-9]{1,2})[-.](?<y>[0-9]{2,4})(?<tail>.*)$") |
+            .m = (.m | tonumber | tostring) |
+            .d = (.d | tonumber | tostring) |
+            .y = (if (.y | tonumber) > 1000 then (.y | tonumber) % 100 | tostring else .y end) |
+            {
+              "key": "\(.m)-\(.d)-\(.y)",
+              "value": {
+                "filename": "\(.m).\(.d).\(.y)\(.tail)",
+                "url": "https://TheCathedralFCCLA.github.io/OW/OWs/\(.m).\(.d).\(.y)\(.tail | @uri)",
+                "display_date": "\(.m)/\(.d)/\(.y)"
+              }
+            }
+          ) | from_entries
+        ' > index.json
         
-        echo "Index file tracking grid compiled successfully with clean URLs:"
+        echo "Master dynamic database map compiled successfully:"
         cat index.json
 
     - name: Commit and Sync Directory Manifest to Main Track
