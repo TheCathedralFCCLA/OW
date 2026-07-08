@@ -1,0 +1,46 @@
+name: Generate OW PDF Directory Index
+
+on:
+  push:
+    branches:
+      - main     # Triggers automatically when pushing code or assets to your main branch
+    paths:
+      - 'OWs/**' # Triggers only if changes occur inside your OWs subfolder
+  workflow_dispatch: # Allows you to manually click a button in GitHub to force-run the scan
+
+permissions:
+  contents: write # Grants the runner permission to write and commit the index back to your repo
+
+jobs:
+  build-index:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository Code Layers
+      uses: actions/checkout@v4
+
+    - name: Scan Directory and Build Static File Matrix
+      run: |
+        cd OWs
+        echo "Scanning files inside the /OWs directory..."
+        
+        # Pulls clean file names, filters down to files ending in .pdf, and formats them into a JSON array
+        ls -1 | grep -i '\.pdf$' | jq -R . | jq -s . > index.json
+        
+        echo "Index file tracking grid compiled successfully:"
+        cat index.json
+
+    - name: Commit and Sync Directory Manifest to Main Track
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        
+        git add OWs/index.json
+        
+        # Check if the file actually changed before running a blind commit loop
+        if git diff --staged --quiet; then
+          echo "No layout modifications or new asset paths detected. Skipping sync."
+        else
+          git commit -m "chore: automated directory matrix update [skip ci]"
+          git push origin main
+        fi
