@@ -1,116 +1,143 @@
-<style>
-    /* Force Squarespace's row layout containers to collapse default padding/margin blocks */
-    .page-section, 
-    .content-wrapper, 
-    .sqs-layout, 
-    .sqs-block-code,
-    #dynamic-ow-container,
-    #dynamic-ow-container > div {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-    }
-
-    /* Fixed flex container that conforms to the parent Squarespace block layout bounds */
-    .ow-master-grid {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        height: 100%; /* Capped: follows the exact container frame boundaries dragging out in Squarespace */
-        margin: 0 auto;
-        padding: 0;
-        box-sizing: border-box;
-        margin-top: -20px !important; /* Pulls layout snug up to navigation */
-    }
-
-    .ow-title-block h1 {
-        margin: 0 !important;
-        padding: 0 !important;
-        text-align: center;
-    }
-
-    .ow-selector-inline {
-        text-align: center;
-        padding: 8px 0 14px 0;
-        margin: 0;
-    }
-
-    .ow-dropdown-style {
-        padding: 6px 12px;
-        font-size: 16px;
-        border-radius: 4px;
-        border: 1px solid #ccc;
-        max-width: 100%;
-        font-family: inherit;
-        cursor: pointer;
-    }
-
-    .ow-viewer-wrapper {
-        position: relative;
-        width: 100%;
-        flex-grow: 1;
-        height: 100%;
-        min-height: 0;
-    }
-</style>
-
-<div class="ow-master-grid" id="ow-embed-container">
-    
-    <!-- Header/Selector Area positioned strictly above document frames -->
-    <div class="ow-title-block" id="ow-title-container">
-        <h1>Order of Worship</h1>
-        <div class="ow-selector-inline">
-            <select id="ow-dropdown" class="ow-dropdown-style">
-                <option value="">Loading...</option>
-            </select>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OW Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #f9f9f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+        #top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 10px 15px;
+            background: #fff;
+            border-bottom: 1px solid #eee;
+        }
+        #status-bar {
+            color: #666;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn:hover {
+            background: #f5f5f5;
+            border-color: #999;
+        }
+        .btn-primary {
+            color: #fff;
+            background: #cc0000;
+            border-color: #b30000;
+        }
+        .btn-primary:hover {
+            background: #b30000;
+            border-color: #990000;
+        }
+        iframe {
+            width: 100%;
+            flex-grow: 1;
+            border: none;
+            margin: 0;
+            padding: 0;
+        }
+        #bottom-bar {
+            padding: 10px;
+            background: #fff;
+            border-top: 1px solid #eee;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Navigation & Action Controls -->
+        <div id="top-bar">
+            <div id="status-bar">Loading OW Document Viewer...</div>
+            <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
         </div>
-    </div>
-    <br>
-
-    <!-- Main document canvas forced to fit remaining block height dimensions cleanly -->
-    <div class="ow-viewer-wrapper" id="ow-frame-wrapper">
-        <div id="ow-loading-status" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
-            Loading OW Document Viewer...
-        </div>
-        <object id="dynamic-ow-viewer" type="application/pdf" style="width:100%; height:100%; display:none;" data=""></object>
-    </div>
-</div>
-
-<script>
-    (function() {
-        const viewerObject = document.getElementById('dynamic-ow-viewer');
-        const statusDiv = document.getElementById('ow-loading-status');
-        const owDropdown = document.getElementById('ow-dropdown');
         
+        <!-- Document Canvas Frame -->
+        <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
+
+        <!-- Bottom Action Layout Bar -->
+        <div id="bottom-bar">
+            <a id="open-new-tab-btn" class="btn" target="_blank">Open PDF in New Tab</a>
+        </div>
+    </div>
+
+    <script>
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
         const SUBFOLDER = 'OWs';
+        
+        // Target YouTube stream database tracker
+        const YT_JSON_URL = 'https://raw.githubusercontent.com/cju-media/FCCLA-Youtube-Checker/main/data/playlist_streams.json';
 
-        function getOWCookie() {
-            const name = "targetOWDate=";
-            const decodedCookie = decodeURIComponent(document.cookie);
-            const ca = decodedCookie.split(';');
-            for(let i = 0; i < ca.length; i++) {
-                let c = ca[i].trim();
-                if (c.indexOf(name) === 0) {
-                    return c.substring(name.length, c.length);
-                }
+        function getTargetFilenameFromPath() {
+            const path = window.location.pathname;
+            const segments = path.split('/').filter(Boolean);
+            
+            const filteredSegments = segments.filter(seg => {
+                const lower = seg.toLowerCase();
+                return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
+            });
+
+            if (filteredSegments.length === 0) {
+                return null; 
             }
-            return null;
-        }
 
-        function parseDateParts(name) {
-            const match = name.trim().split(/[\s_+]/)[0].split('.');
-            return {
-                month: parseInt(match[0], 10) || 0,
-                day: parseInt(match[1], 10) || 0,
-                year: parseInt(match[2], 10) || 0
-            };
+            const dateSlug = filteredSegments[0];
+            const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/;
+            const match = dateSlug.match(dateRegex);
+
+            if (match) {
+                let [_, month, day, year] = match;
+                month = parseInt(month, 10).toString();
+                day = parseInt(day, 10).toString();
+                
+                if (year.length === 4) {
+                    year = year.slice(-2);
+                }
+                
+                return `${month}.${day}.${year} ow.pdf`;
+            }
+            return null; 
         }
 
         function sortFilesChronologically(pdfFiles) {
             pdfFiles.sort((a, b) => {
+                const parseDateParts = (name) => {
+                    const parts = name.split(' ')[0].split('.');
+                    return {
+                        month: parseInt(parts[0], 10) || 0,
+                        day: parseInt(parts[1], 10) || 0,
+                        year: parseInt(parts[2], 10) || 0
+                    };
+                };
                 const dateA = parseDateParts(a.name);
                 const dateB = parseDateParts(b.name);
 
@@ -120,113 +147,137 @@
             });
         }
 
-        function switchOW(fileName, cleanDatePart) {
-            const targetPdfUrl = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${fileName}`;
-            const urlSlug = cleanDatePart.replace(/\./g, '-');
+        // Extracts date from standard filename strings (e.g. "6.28.26 ow.pdf" -> Month: 6, Day: 28, Year: 26)
+        function extractDateFromFilename(filename) {
+            const cleanPart = filename.split(/[\s_+]/)[0];
+            const parts = cleanPart.split('.');
+            if (parts.length >= 3) {
+                return {
+                    month: parseInt(parts[0], 10),
+                    day: parseInt(parts[1], 10),
+                    year: parseInt(parts[2].slice(-2), 10)
+                };
+            }
+            return null;
+        }
 
-            viewerObject.data = targetPdfUrl + '#view=Fit';
-            window.history.pushState(null, '', '/ows/' + urlSlug);
+        // Cross-references the active file date with the YouTube broadcast index matrix
+        async function matchYoutubeVideo(pdfFilename) {
+            const watchBtn = document.getElementById('watch-service-btn');
+            const targetDate = extractDateFromFilename(pdfFilename);
+            if (!targetDate) return;
+
+            try {
+                const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
+                const data = await response.json();
+                
+                // Array lookup checking either structural objects or raw dictionary arrays
+                const streamsList = Array.isArray(data) ? data : (data.streams || []);
+                
+                const matchedStream = streamsList.find(stream => {
+                    // Normalizes varied date string layouts (e.g. "2026-06-28", "6/28/26", or timestamps)
+                    if (!stream.date) return false;
+                    const streamDateParts = stream.date.split(/[-/.]/);
+                    
+                    let sMonth, sDay, sYear;
+                    if (streamDateParts[0].length === 4) { // YYYY-MM-DD
+                        sYear = parseInt(streamDateParts[0].slice(-2), 10);
+                        sMonth = parseInt(streamDateParts[1], 10);
+                        sDay = parseInt(streamDateParts[2], 10);
+                    } else { // MM-DD-YY or MM-DD-YYYY
+                        sMonth = parseInt(streamDateParts[0], 10);
+                        sDay = parseInt(streamDateParts[1], 10);
+                        sYear = parseInt(streamDateParts[2].slice(-2), 10);
+                    }
+
+                    return sMonth === targetDate.month && sDay === targetDate.day && sYear === targetDate.year;
+                });
+
+                if (matchedStream && (matchedStream.video_id || matchedStream.id)) {
+                    const id = matchedStream.video_id || matchedStream.id;
+                    watchBtn.href = `https://www.youtube.com/watch?v=${id}`;
+                    watchBtn.style.display = 'inline-block';
+                }
+            } catch (err) {
+                console.warn('Could not coordinate index mapping to YouTube stream targets:', err);
+            }
+        }
+
+        function mountDocumentTargets(finalPdfUrl, filename) {
+            const statusBar = document.getElementById('status-bar');
+            const viewerFrame = document.getElementById('ow-viewer');
+            const openNewTabBtn = document.getElementById('open-new-tab-btn');
+
+            statusBar.style.display = 'none';
+            viewerFrame.src = finalPdfUrl + '#view=Fit';
+            openNewTabBtn.href = finalPdfUrl;
+
+            // Trigger the YouTube data lookup
+            matchYoutubeVideo(filename);
         }
 
         async function loadViewer() {
-            const savedDate = getOWCookie();
+            const statusBar = document.getElementById('status-bar');
+            const targetFilename = getTargetFilenameFromPath();
             const cacheBuster = `?cb=${new Date().getTime()}`;
-            let activeFile = null;
-            let activeCleanDate = '';
-
-            if (savedDate) {
-                document.cookie = "targetOWDate=; max-age=0; path=/";
-                window.history.pushState(null, '', '/ows/' + savedDate);
-            }
 
             try {
-                const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
-                const files = await response.json();
+                // CASE 1: Explicit Date Link requested
+                if (targetFilename) {
+                    const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
+                    const files = await response.json();
 
-                if (Array.isArray(files)) {
-                    const pdfFiles = files.filter(file => {
-                        const name = file.name.toLowerCase();
-                        return name.endsWith('.pdf') && /^\d{1,2}\.\d{1,2}\.\d{2,4}/.test(name);
-                    });
-                    
-                    sortFilesChronologically(pdfFiles);
-
-                    if (pdfFiles.length > 0) {
-                        owDropdown.innerHTML = '';
-                        pdfFiles.forEach(file => {
-                            const cleanDatePart = file.name.split(/[\s_+]/)[0];
-                            const labelDate = cleanDatePart.replace(/\./g, '/');
-                            const option = document.createElement('option');
-                            option.value = file.name;
-                            option.setAttribute('data-date', cleanDatePart);
-                            option.innerText = labelDate;
-                            owDropdown.appendChild(option);
-                        });
-
-                        if (savedDate) {
-                            const dateParts = savedDate.split('-');
-                            const searchMonth = parseInt(dateParts[0], 10);
-                            const searchDay = parseInt(dateParts[1], 10);
-                            const searchYear = parseInt(dateParts[2].slice(-2), 10);
-
-                            const matchedFile = pdfFiles.find(file => {
-                                const fParts = parseDateParts(file.name);
-                                return fParts.month === searchMonth && fParts.day === searchDay && fParts.year === searchYear;
-                            });
-                            
-                            if (matchedFile) {
-                                activeFile = matchedFile;
-                                activeCleanDate = matchedFile.name.split(/[\s_+]/)[0];
-                            } else {
-                                activeFile = pdfFiles[0];
-                                activeCleanDate = pdfFiles[0].name.split(/[\s_+]/)[0];
-                            }
-                        } else {
-                            activeFile = pdfFiles[0];
-                            activeCleanDate = pdfFiles[0].name.split(/[\s_+]/)[0];
+                    if (Array.isArray(files)) {
+                        const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+                        const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename);
+                        
+                        if (matchedFile) {
+                            const url = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
+                            mountDocumentTargets(url, matchedFile.name);
+                            return;
                         }
+                    }
+                    statusBar.innerText = 'Requested date PDF not found. Fetching main folder...';
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
 
-                        owDropdown.value = activeFile.name;
+                // CASE 2: Base layout page path loaded -> Pull primary document layout from Root Folder
+                const rootResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents${cacheBuster}`);
+                const rootFiles = await rootResponse.json();
+
+                if (Array.isArray(rootFiles)) {
+                    const rootPdfs = rootFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+
+                    if (rootPdfs.length > 0) {
+                        sortFilesChronologically(rootPdfs);
+                        const url = `https://${USER}.github.io/${REPO}/${rootPdfs[0].name}`;
+                        mountDocumentTargets(url, rootPdfs[0].name);
+                        return;
                     }
                 }
 
-                if (activeFile) {
-                    switchOW(activeFile.name, activeCleanDate);
-                    
-                    setTimeout(() => {
-                        statusDiv.style.display = 'none';
-                        viewerObject.style.display = 'block';
-                    }, 200);
-                } else {
-                    statusDiv.innerText = 'No Order of Worship documents found.';
-                    owDropdown.innerHTML = '<option value="">No archives available</option>';
+                // CASE 3: Backup Fallback -> Use newest document asset inside /OWs
+                const backupResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
+                const backupFiles = await backupResponse.json();
+                
+                if (Array.isArray(backupFiles)) {
+                    const backupPdfs = backupFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+                    if (backupPdfs.length > 0) {
+                        sortFilesChronologically(backupPdfs);
+                        const url = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${backupPdfs[0].name}`;
+                        mountDocumentTargets(url, backupPdfs[0].name);
+                        return;
+                    }
                 }
 
+                statusBar.innerText = 'No documents found.';
             } catch (error) {
-                statusDiv.innerText = 'Error loading document viewer engine layers.';
+                statusBar.innerText = 'Error connection payload failed.';
                 console.error(error);
             }
         }
 
-        owDropdown.addEventListener('change', function(e) {
-            const selectedFileName = e.target.value;
-            if (!selectedFileName) return;
-
-            const selectedOption = e.target.options[e.target.selectedIndex];
-            const cleanDatePart = selectedOption.getAttribute('data-date');
-            
-            viewerObject.style.display = 'none';
-            statusDiv.style.display = 'block';
-            statusDiv.innerText = 'Loading Selected OW Document...';
-
-            switchOW(selectedFileName, cleanDatePart);
-
-            setTimeout(() => {
-                statusDiv.style.display = 'none';
-                viewerObject.style.display = 'block';
-            }, 200);
-        });
-
         loadViewer();
-    })();
-</script>
+    </script>
+</body>
+</html>
