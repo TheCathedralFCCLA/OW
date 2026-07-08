@@ -21,18 +21,34 @@
         }
         #top-bar {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 15px;
+            gap: 4px;
             padding: 10px 15px;
             background: #fff;
             border-bottom: 1px solid #eee;
+            text-align: center;
+        }
+        /* Inherits styles from Squarespace globally but forces margins to zero to kill blank whitespace gaps */
+        #top-bar h1 {
+            margin: 0 !important;
+            padding: 0 !important;
+            font-size: 26px;
+        }
+        #top-bar h3 {
+            margin: 2px 0 6px 0 !important;
+            padding: 0 !important;
+            font-size: 16px;
+            font-weight: normal;
         }
         #status-bar {
             color: #666;
             font-size: 14px;
+            margin-bottom: 4px;
         }
         .btn {
+            display: inline-block;
             padding: 6px 14px;
             font-size: 13px;
             font-weight: 500;
@@ -76,6 +92,8 @@
     <div class="container">
         <!-- Top Navigation & Action Controls -->
         <div id="top-bar">
+            <h1>Order of Worship</h1>
+            <h3 id="ow-dynamic-date"></h3>
             <div id="status-bar">Loading OW Document Viewer...</div>
             <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
         </div>
@@ -147,7 +165,6 @@
             });
         }
 
-        // Extracts date from standard filename strings (e.g. "6.28.26 ow.pdf" -> Month: 6, Day: 28, Year: 26)
         function extractDateFromFilename(filename) {
             const cleanPart = filename.split(/[\s_+]/)[0];
             const parts = cleanPart.split('.');
@@ -161,7 +178,7 @@
             return null;
         }
 
-        // Cross-references the active file date with the YouTube broadcast index matrix
+        // Cross-references the active file date with the raw scheduledStartTime strings inside the playlist json
         async function matchYoutubeVideo(pdfFilename) {
             const watchBtn = document.getElementById('watch-service-btn');
             const targetDate = extractDateFromFilename(pdfFilename);
@@ -171,40 +188,42 @@
                 const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
                 
-                // Array lookup checking either structural objects or raw dictionary arrays
-                const streamsList = Array.isArray(data) ? data : (data.streams || []);
+                // Accounts for cju-media's standard checker wrapping format array
+                const itemsList = data.items || (Array.isArray(data) ? data : []);
                 
-                const matchedStream = streamsList.find(stream => {
-                    // Normalizes varied date string layouts (e.g. "2026-06-28", "6/28/26", or timestamps)
-                    if (!stream.date) return false;
-                    const streamDateParts = stream.date.split(/[-/.]/);
-                    
-                    let sMonth, sDay, sYear;
-                    if (streamDateParts[0].length === 4) { // YYYY-MM-DD
-                        sYear = parseInt(streamDateParts[0].slice(-2), 10);
-                        sMonth = parseInt(streamDateParts[1], 10);
-                        sDay = parseInt(streamDateParts[2], 10);
-                    } else { // MM-DD-YY or MM-DD-YYYY
-                        sMonth = parseInt(streamDateParts[0], 10);
-                        sDay = parseInt(streamDateParts[1], 10);
-                        sYear = parseInt(streamDateParts[2].slice(-2), 10);
-                    }
+                const matchedItem = itemsList.find(item => {
+                    // Extract date out of standard scheduledStartTime layouts (e.g. "2026-07-05T...")
+                    const timeString = item.scheduledStartTime || (item.snippet ? item.snippet.publishedAt : null);
+                    if (!timeString) return false;
 
-                    return sMonth === targetDate.month && sDay === targetDate.day && sYear === targetDate.year;
+                    const rawDatePart = timeString.split('T')[0]; // Gets "2026-07-05"
+                    const dateParts = rawDatePart.split('-');
+                    
+                    if (dateParts.length >= 3) {
+                        const sYear = parseInt(dateParts[0].slice(-2), 10);
+                        const sMonth = parseInt(dateParts[1], 10);
+                        const sDay = parseInt(dateParts[2], 10);
+                        return sMonth === targetDate.month && sDay === targetDate.day && sYear === targetDate.year;
+                    }
+                    return false;
                 });
 
-                if (matchedStream && (matchedStream.video_id || matchedStream.id)) {
-                    const id = matchedStream.video_id || matchedStream.id;
-                    watchBtn.href = `https://www.youtube.com/watch?v=${id}`;
-                    watchBtn.style.display = 'inline-block';
+                if (matchedItem) {
+                    // Pulls either standard or nested video configurations safely
+                    const videoId = matchedItem.id?.videoId || matchedItem.video_id || matchedItem.id;
+                    if (videoId && typeof videoId === 'string') {
+                        watchBtn.href = `https://www.youtube.com/watch?v=${videoId}`;
+                        watchBtn.style.display = 'inline-block';
+                    }
                 }
             } catch (err) {
-                console.warn('Could not coordinate index mapping to YouTube stream targets:', err);
+                console.warn('Could not map matching YouTube transmission details:', err);
             }
         }
 
         function mountDocumentTargets(finalPdfUrl, filename) {
             const statusBar = document.getElementById('status-bar');
+            const dateHeader = document.getElementById('ow-dynamic-date');
             const viewerFrame = document.getElementById('ow-viewer');
             const openNewTabBtn = document.getElementById('open-new-tab-btn');
 
@@ -212,7 +231,13 @@
             viewerFrame.src = finalPdfUrl + '#view=Fit';
             openNewTabBtn.href = finalPdfUrl;
 
-            // Trigger the YouTube data lookup
+            // Display clean visual date text
+            const targetDate = extractDateFromFilename(filename);
+            if (targetDate) {
+                dateHeader.innerText = `${targetDate.month}/${targetDate.day}/${targetDate.year}`;
+            }
+
+            // Fire off YouTube matching lookup engine parameters
             matchYoutubeVideo(filename);
         }
 
