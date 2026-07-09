@@ -61,7 +61,6 @@
             gap: 8px;
             margin-top: 4px;
         }
-        /* FIXED: Both buttons now share this single, uniform clean style */
         .btn {
             display: inline-block;
             padding: 6px 14px;
@@ -128,7 +127,6 @@
             <div id="status-bar" style="display: none;">Loading document framework...</div>
             
             <div class="ow-actions-wrapper">
-                <!-- FIXED: Classes are identical for both buttons now -->
                 <a id="watch-service-btn" class="btn" target="_blank" style="display: none;">Watch Service</a>
                 <a id="open-new-tab-btn" class="btn" target="_blank">Open OW in New Tab</a>
             </div>
@@ -163,15 +161,15 @@
             return `${month}-${day}-${year}`;
         }
 
-        // Strict Regex to capture ONLY the leading date values, disregarding tail text completely
         function extractCleanDateKey(filename) {
+            if (!filename) return null;
             if (filename.includes('/')) {
                 filename = filename.substring(filename.lastIndexOf('/') + 1);
             }
+            // Strips out surrounding trailing syntax structures safely
             const match = filename.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
             if (match) {
-                const norm = normalizeDate(match[1], match[2], match[3]);
-                return `${norm.month}-${norm.day}-${norm.year}`;
+                return normalizeDate(match[1], match[2], match[3]);
             }
             return null;
         }
@@ -194,9 +192,8 @@
                 }
             }
 
-            if (!dateSlug) return null;
-            const match = dateSlug.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
-            return match ? normalizeDate(match[1], match[2], match[3]) : null;
+            // FIXED: Run raw slug strings explicitly through our normalizer to iron out any zero discrepancies
+            return extractCleanDateKey(dateSlug);
         }
 
         function sortKeysChronologically(keys) {
@@ -292,6 +289,7 @@
                         owDropdown.appendChild(option);
                     });
 
+                    // FIXED: Secure mapping comparison tracks resolve cleanly now
                     if (pathTargetKey && masterDatabase[pathTargetKey]) {
                         activeKey = pathTargetKey;
                     } else {
