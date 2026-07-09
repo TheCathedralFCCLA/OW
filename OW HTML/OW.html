@@ -3,6 +3,8 @@
 <head>
     <title>OW Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Inject PDF.js Core Engine and Legacy Compatibility Infrastructure Layers -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         html, body {
             margin: 0;
@@ -87,6 +89,33 @@
             background: #b30000;
             border-color: #990000;
         }
+        
+        /* Custom Mobile Virtual PDF Render Canvas Deck */
+        #mobile-pdf-deck {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            background: #f9f9f9;
+            padding: 10px 0;
+            box-sizing: border-box;
+        }
+        .mobile-pdf-page-canvas {
+            width: 94% !important;
+            height: auto !important;
+            max-width: 650px;
+            margin-bottom: 12px;
+            background: #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+            border-radius: 4px;
+        }
+        #mobile-loader-msg {
+            font-size: 15px;
+            color: #666;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
         iframe {
             width: 100%;
             height: 900px;
@@ -97,13 +126,17 @@
         
         @media (max-width: 767px) {
             iframe {
-                height: 650px;
+                display: none !important;
+            }
+            #mobile-pdf-deck {
+                display: flex !important;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -119,10 +152,19 @@
             </div>
         </div>
         
+        <!-- Mobile Custom Scrollable Canvas Container -->
+        <div id="mobile-pdf-deck">
+            <div id="mobile-loader-msg">Initializing digital reading layout...</div>
+        </div>
+        
+        <!-- Desktop Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
     </div>
 
     <script>
+        // Setup worker pathway configuration properties for PDF.js engine instances
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
         const SUBFOLDER = 'OWs';
@@ -135,9 +177,12 @@
         const statusBar = document.getElementById('status-bar');
         const watchBtn = document.getElementById('watch-service-btn');
         const openNewTabBtn = document.getElementById('open-new-tab-btn');
+        const mobilePdfDeck = document.getElementById('mobile-pdf-deck');
+        const mobileLoaderMsg = document.getElementById('mobile-loader-msg');
         const owDropdown = document.getElementById('ow-dropdown');
 
         let masterDatabase = {};
+        let currentRenderTaskToken = null; // Token block to instantly drop stale renders if someone rapidly flips the dropdown
 
         function normalizeDate(m, d, y) {
             let month = parseInt(m, 10);
@@ -145,6 +190,18 @@
             let year = parseInt(y, 10);
             if (year > 1000) year = year % 100;
             return `${month}-${day}-${year}`;
+        }
+
+        function extractCleanDateKey(filename) {
+            if (filename.includes('/')) {
+                filename = filename.substring(filename.lastIndexOf('/') + 1);
+            }
+            const match = filename.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
+            if (match) {
+                const norm = normalizeDate(match[1], match[2], match[3]);
+                return `${norm.month}-${norm.day}-${norm.year}`;
+            }
+            return null;
         }
 
         function getTargetDateKeyFromPath() {
@@ -197,7 +254,53 @@
                     watchBtn.style.display = 'inline-block';
                 }
             } catch (err) {
-                console.warn('[YT Engine] Connection error loading mapping keys:', err);
+                console.warn('[YT Engine] Connection error loading tracking matrix metadata:', err);
+            }
+        }
+
+        // Custom Multi-Page Streaming Mobile Rendering Pipeline Engine
+        async function renderMobilePdfCompilation(pdfUrl) {
+            const assignmentToken = Symbol('renderToken');
+            currentRenderTaskToken = assignmentToken;
+
+            // Flash loader screen layout clean
+            mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg">Downloading multi-page layout document...</div>';
+
+            try {
+                const loadingTask = pdfjsLib.getDocument(pdfUrl);
+                const pdf = await loadingTask.promise;
+                
+                if (currentRenderTaskToken !== assignmentToken) return; // Stale dropdown select drop rule
+                mobilePdfDeck.innerHTML = ''; // Wipe loader message cleanly once document structure stream array commits
+
+                // Step sequentially through every single page found inside the document structure
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    if (currentRenderTaskToken !== assignmentToken) return;
+
+                    const page = await pdf.getPage(pageNum);
+                    
+                    // Create an individual canvas tile element per page track found
+                    const canvas = document.createElement('canvas');
+                    canvas.className = 'mobile-pdf-page-canvas';
+                    mobilePdfDeck.appendChild(canvas);
+
+                    const ctx = canvas.getContext('2d');
+                    // Render out sharp 2.0x display layout texture grids
+                    const viewport = page.getViewport({ scale: 2.0 });
+                    
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    const renderContext = {
+                        canvasContext: ctx,
+                        viewport: viewport
+                    };
+                    
+                    await page.render(renderContext).promise;
+                }
+            } catch (err) {
+                console.error('[Mobile PDF Engine] Crash compiling canvas layouts:', err);
+                mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg" style="color:#cc0000;">Unable to render document inline. Please use the "Open OW" button above.</div>';
             }
         }
 
@@ -206,8 +309,14 @@
             if (!fileData) return;
 
             statusBar.style.display = 'none';
-            viewerFrame.src = fileData.url + '#view=Fit';
             openNewTabBtn.href = fileData.url;
+
+            // Route execution paths symmetrically depending on layout window breakpoint profiles
+            if (window.innerWidth <= 767) {
+                renderMobilePdfCompilation(fileData.url);
+            } else {
+                viewerFrame.src = fileData.url + '#view=Fit';
+            }
 
             if (window.location.protocol !== 'file:') {
                 window.history.pushState(null, '', '/ows/' + dateKey);
