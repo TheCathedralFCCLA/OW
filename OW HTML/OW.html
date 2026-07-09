@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>OW Diagnostics Viewer</title>
+    <title>OW Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         html, body {
@@ -88,33 +88,24 @@
             border-color: #990000;
         }
         
-        #mobile-pdf-deck {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        /* Unified, bulletproof document layout engine container slot */
+        #ow-document-holder {
             width: 100%;
+            height: 900px;
+            margin: 0;
+            padding: 0;
             background: #f9f9f9;
-            padding: 20px 0;
-            box-sizing: border-box;
         }
-        .mobile-pdf-page-canvas {
-            width: 94% !important;
-            height: auto !important;
-            max-width: 800px;
-            margin-bottom: 20px;
-            background: #fff;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            border-radius: 4px;
+        .native-pdf-object {
+            width: 100%;
+            height: 100%;
+            border: none;
         }
-        #mobile-loader-msg {
-            font-size: 16px;
-            color: #666;
-            padding: 40px 20px;
-            text-align: center;
-        }
-
-        iframe {
-            display: none !important;
+        
+        @media (max-width: 767px) {
+            #ow-document-holder {
+                height: 700px; /* Responsive viewing dimension layout for small screens */
+            }
         }
     </style>
 </head>
@@ -122,7 +113,7 @@
     <div class="container">
         <!-- Top Layout Section -->
         <div id="top-bar">
-            <h1>Order of Worship <span style="font-size:12px; color:#cc0000; vertical-align:middle;">[Module Trace Mode]</span></h1>
+            <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
                 <select id="ow-dropdown" class="ow-dropdown-style">
                     <option value="">Loading available editions...</option>
@@ -136,24 +127,11 @@
             </div>
         </div>
         
-        <!-- Custom Scrollable Canvas Container -->
-        <div id="mobile-pdf-deck">
-            <div id="mobile-loader-msg">Initializing layout modules...</div>
-        </div>
-        
-        <!-- Desktop Document Canvas Frame -->
-        <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
+        <!-- The Master Native Document Viewing Portal Slot -->
+        <div id="ow-document-holder"></div>
     </div>
 
-    <!-- CRITICAL FIX: Changed script execution block to type="module" to enable direct sandbox memory injections -->
-    <script type="module">
-        // Import PDF.js directly into isolated memory, bypassing Squarespace window filters entirely
-        import * as pdfjsModule from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs';
-        
-        // Map the imported reference module layers out
-        const pdfjsLib = pdfjsModule;
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs';
-
+    <script>
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
         const SUBFOLDER = 'OWs';
@@ -162,16 +140,13 @@
         const GITHUB_API_URL = `https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}`;
         const YT_JSON_URL = 'https://raw.githubusercontent.com/cju-media/FCCLA-Youtube-Checker/main/data/playlist_streams.json';
 
-        const viewerFrame = document.getElementById('ow-viewer');
+        const documentHolder = document.getElementById('ow-document-holder');
         const statusBar = document.getElementById('status-bar');
         const watchBtn = document.getElementById('watch-service-btn');
         const openNewTabBtn = document.getElementById('open-new-tab-btn');
-        const mobilePdfDeck = document.getElementById('mobile-pdf-deck');
-        const mobileLoaderMsg = document.getElementById('mobile-loader-msg');
         const owDropdown = document.getElementById('ow-dropdown');
 
         let masterDatabase = {};
-        let currentRenderTaskToken = null;
 
         function normalizeDate(m, d, y) {
             let month = parseInt(m, 10);
@@ -235,7 +210,7 @@
             const targetKey = `20${pad(parts[2])}${pad(parts[0])}${pad(parts[1])}`;
 
             try {
-                const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`, { mode: 'cors' });
+                const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
                 
                 if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
@@ -247,56 +222,6 @@
             }
         }
 
-        async function renderMobilePdfCompilation(pdfUrl) {
-            console.log(`[Module Trace] Initializing download pipeline for: "${pdfUrl}"`);
-            
-            const assignmentToken = Symbol('renderToken');
-            currentRenderTaskToken = assignmentToken;
-
-            mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg">Downloading multi-page layout document...</div>';
-
-            try {
-                const loadingTask = pdfjsLib.getDocument({
-                    url: pdfUrl,
-                    withCredentials: false
-                });
-                
-                const pdf = await loadingTask.promise;
-                console.log(`[Module Trace] Download verified. Found pages inside bundle: ${pdf.numPages}`);
-                
-                if (currentRenderTaskToken !== assignmentToken) return;
-                mobilePdfDeck.innerHTML = ''; 
-
-                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                    if (currentRenderTaskToken !== assignmentToken) return;
-
-                    console.log(`[Module Trace] Rasterizing page item frame: [${pageNum}/${pdf.numPages}]...`);
-                    const page = await pdf.getPage(pageNum);
-                    
-                    const canvas = document.createElement('canvas');
-                    canvas.className = 'mobile-pdf-page-canvas';
-                    mobilePdfDeck.appendChild(canvas);
-
-                    const ctx = canvas.getContext('2d');
-                    const viewport = page.getViewport({ scale: 1.5 }); 
-                    
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-
-                    const renderContext = {
-                        canvasContext: ctx,
-                        viewport: viewport
-                    };
-                    
-                    await page.render(renderContext).promise;
-                }
-                console.log("[Module Trace] All page frame arrays compiled successfully.");
-            } catch (err) {
-                console.error('[Module Trace Critical Exception]', err);
-                mobilePdfDeck.innerHTML = `<div id="mobile-loader-msg" style="color:#cc0000; font-weight:bold;">模块处理错误 (Module Processing Error):<br><span style="font-size:13px; font-family:monospace; color:#333;">${err.message || err}</span></div>`;
-            }
-        }
-
         function switchOW(dateKey) {
             const fileData = masterDatabase[dateKey];
             if (!fileData) return;
@@ -304,7 +229,13 @@
             statusBar.style.display = 'none';
             openNewTabBtn.href = fileData.url;
 
-            renderMobilePdfCompilation(fileData.url);
+            // FIXED: Reconstructs a clean, standard object layout wrapper dynamically to trigger smooth scrolling multi-page actions across iOS and Android natively
+            const fileTargetLink = fileData.url + '#view=Fit&pagemode=none';
+            documentHolder.innerHTML = `
+                <object class="native-pdf-object" data="${fileTargetLink}" type="application/pdf">
+                    <iframe class="native-pdf-object" src="${fileTargetLink}" allow="autoplay"></iframe>
+                </object>
+            `;
 
             if (window.location.protocol !== 'file:') {
                 window.history.pushState(null, '', '/ows/' + dateKey);
@@ -320,7 +251,7 @@
             try {
                 if (window.location.protocol === 'file:') {
                     console.log("[Directory Engine] Local mode: query live API.");
-                    const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`, { mode: 'cors' });
+                    const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`);
                     const apiData = await response.json();
                     if (Array.isArray(apiData)) {
                         apiData.forEach(item => {
@@ -338,7 +269,7 @@
                     }
                 } else {
                     console.log("[Directory Engine] Production mode: loading static database dictionary.");
-                    const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`, { mode: 'cors' });
+                    const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`);
                     masterDatabase = await response.json();
                 }
 
@@ -371,12 +302,11 @@
                 }
 
             } catch (error) {
-                console.error('[Module Trace Manifest Fetch Failure]', error);
                 statusBar.innerText = 'Error loading unified tracking matrix database layers.';
+                console.error(error);
             }
         }
 
-        // Add event listener safely inside our module script wrapper framework
         owDropdown.addEventListener('change', function(e) {
             const selectedKey = e.target.value;
             if (selectedKey && masterDatabase[selectedKey]) {
