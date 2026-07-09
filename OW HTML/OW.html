@@ -116,7 +116,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -132,7 +131,6 @@
             </div>
         </div>
         
-        <!-- The Master Native Document Viewing Portal Slot -->
         <div id="ow-document-holder"></div>
     </div>
 
@@ -166,7 +164,6 @@
             if (filename.includes('/')) {
                 filename = filename.substring(filename.lastIndexOf('/') + 1);
             }
-            // Strips out surrounding trailing syntax structures safely
             const match = filename.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
             if (match) {
                 return normalizeDate(match[1], match[2], match[3]);
@@ -192,7 +189,6 @@
                 }
             }
 
-            // FIXED: Run raw slug strings explicitly through our normalizer to iron out any zero discrepancies
             return extractCleanDateKey(dateSlug);
         }
 
@@ -289,7 +285,6 @@
                         owDropdown.appendChild(option);
                     });
 
-                    // FIXED: Secure mapping comparison tracks resolve cleanly now
                     if (pathTargetKey && masterDatabase[pathTargetKey]) {
                         activeKey = pathTargetKey;
                     } else {
@@ -319,7 +314,12 @@
             }
         });
 
+        // FIXED: Instantly initialize on raw window load track execution
         loadViewer();
+
+        // FIXED: Crucial AJAX lifecycle hook listener for smooth Squarespace navigation processing stability
+        window.addEventListener('popstate', loadViewer);
+        document.addEventListener('squarespace:page-navigate', loadViewer);
     </script>
 </body>
 </html>
