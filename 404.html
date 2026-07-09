@@ -1,166 +1,36 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>OW Viewer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #f9f9f9;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            height: 100%;
-        }
-        #status-bar {
-            padding: 12px;
-            background: #fff;
-            border-bottom: 1px solid #eee;
-            text-align: center;
-            color: #666;
-            font-size: 14px;
-        }
-        iframe {
-            width: 100%;
-            flex-grow: 1;
-            border: none;
-            margin: 0;
-            padding: 0;
-        }
-    </style>
+    <meta charset="utf-8">
+    <title>Routing Session Redirect...</title>
+    <script>
+        // Store the dynamic slug segment before bouncing to prevent index fallback drops
+        (function() {
+            var path = window.location.pathname;
+            var segments = path.split('/').filter(Boolean);
+            
+            // Look for a date string track sequence (digits split by dashes or dots)
+            var dateRegex = /(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/;
+            var matchedSlug = null;
+            
+            for (var i = 0; i < segments.length; i++) {
+                if (dateRegex.test(segments[i])) {
+                    matchedSlug = segments[i];
+                    break;
+                }
+            }
+            
+            if (matchedSlug) {
+                console.log("[404 Routing] Preserving date target key session: " + matchedSlug);
+                sessionStorage.setItem('redirect_ow_date', matchedSlug);
+            }
+            
+            // Securely route back down to your master viewer script page track root
+            window.location.replace("https://TheCathedralFCCLA.github.io/OW/OW%20HTML/OW.html");
+        })();
+    </script>
 </head>
 <body>
-    <div class="container">
-        <div id="status-bar">Loading OW Document Viewer...</div>
-        <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
-    </div>
-
-    <script>
-        const USER = 'TheCathedralFCCLA';
-        const REPO = 'OW';
-        const SUBFOLDER = 'OWs';
-
-        function getTargetFilenameFromPath() {
-            const path = window.location.pathname;
-            const segments = path.split('/').filter(Boolean);
-            
-            // Filters out REPO name and 'ows' slugs so only the raw date string remains
-            const filteredSegments = segments.filter(seg => {
-                const lower = seg.toLowerCase();
-                return lower !== REPO.toLowerCase() && lower !== SUBFOLDER.toLowerCase();
-            });
-
-            if (filteredSegments.length === 0) {
-                return null; 
-            }
-
-            const dateSlug = filteredSegments[0];
-            const dateRegex = /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/;
-            const match = dateSlug.match(dateRegex);
-
-            if (match) {
-                let [_, month, day, year] = match;
-                month = parseInt(month, 10).toString();
-                day = parseInt(day, 10).toString();
-                
-                if (year.length === 4) {
-                    year = year.slice(-2);
-                }
-                
-                return `${month}.${day}.${year} ow.pdf`;
-            }
-            return null; 
-        }
-
-        function sortFilesChronologically(pdfFiles) {
-            pdfFiles.sort((a, b) => {
-                const parseDateParts = (name) => {
-                    const parts = name.split(' ')[0].split('.');
-                    return {
-                        month: parseInt(parts[0], 10) || 0,
-                        day: parseInt(parts[1], 10) || 0,
-                        year: parseInt(parts[2], 10) || 0
-                    };
-                };
-                const dateA = parseDateParts(a.name);
-                const dateB = parseDateParts(b.name);
-
-                if (dateA.year !== dateB.year) return dateB.year - dateA.year;
-                if (dateA.month !== dateB.month) return dateB.month - dateA.month;
-                return dateB.day - dateA.day;
-            });
-        }
-
-        async function loadViewer() {
-            const statusBar = document.getElementById('status-bar');
-            const viewerFrame = document.getElementById('ow-viewer');
-            const targetFilename = getTargetFilenameFromPath();
-            const cacheBuster = `?cb=${new Date().getTime()}`;
-
-            try {
-                // CASE 1: Explicit Date Link requested -> Pull specific target from /OWs subfolder
-                if (targetFilename) {
-                    const response = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
-                    const files = await response.json();
-
-                    if (Array.isArray(files)) {
-                        const pdfFiles = files.filter(file => file.name.toLowerCase().endsWith('.pdf'));
-                        const matchedFile = pdfFiles.find(file => file.name.toLowerCase() === targetFilename);
-                        
-                        if (matchedFile) {
-                            statusBar.style.display = 'none';
-                            viewerFrame.src = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${matchedFile.name}`;
-                            return;
-                        }
-                    }
-                    statusBar.innerText = 'Requested date PDF not found. Fetching main folder...';
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-
-                // CASE 2: Base layout page path loaded -> Grab primary document layout from Root Folder
-                const rootResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents${cacheBuster}`);
-                const rootFiles = await rootResponse.json();
-
-                if (Array.isArray(rootFiles)) {
-                    const rootPdfs = rootFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
-
-                    if (rootPdfs.length > 0) {
-                        sortFilesChronologically(rootPdfs);
-                        statusBar.style.display = 'none';
-                        viewerFrame.src = `https://${USER}.github.io/${REPO}/${rootPdfs[0].name}`;
-                        return;
-                    }
-                }
-
-                // CASE 3: Backup Fallback -> Use newest document asset inside /OWs
-                const backupResponse = await fetch(`https://api.github.com/repos/${USER}/${REPO}/contents/${SUBFOLDER}${cacheBuster}`);
-                const backupFiles = await backupResponse.json();
-                
-                if (Array.isArray(backupFiles)) {
-                    const backupPdfs = backupFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
-                    if (backupPdfs.length > 0) {
-                        sortFilesChronologically(backupPdfs);
-                        statusBar.style.display = 'none';
-                        viewerFrame.src = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${backupPdfs[0].name}`;
-                        return;
-                    }
-                }
-
-                statusBar.innerText = 'No documents found.';
-            } catch (error) {
-                statusBar.innerText = 'Error connection payload failed.';
-                console.error(error);
-            }
-        }
-
-        loadViewer();
-    </script>
+    <p>Routing to document viewer workspace layers...</p>
 </body>
 </html>
