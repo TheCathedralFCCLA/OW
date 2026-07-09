@@ -3,8 +3,6 @@
 <head>
     <title>OW Diagnostics Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Updated to an auto-initializing release bundle to prevent global object namespace drop failures -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         html, body {
             margin: 0;
@@ -124,7 +122,7 @@
     <div class="container">
         <!-- Top Layout Section -->
         <div id="top-bar">
-            <h1>Order of Worship <span style="font-size:12px; color:#cc0000; vertical-align:middle;">[Diagnostic Mode]</span></h1>
+            <h1>Order of Worship <span style="font-size:12px; color:#cc0000; vertical-align:middle;">[Module Trace Mode]</span></h1>
             <div class="ow-selector-inline">
                 <select id="ow-dropdown" class="ow-dropdown-style">
                     <option value="">Loading available editions...</option>
@@ -140,25 +138,21 @@
         
         <!-- Custom Scrollable Canvas Container -->
         <div id="mobile-pdf-deck">
-            <div id="mobile-loader-msg">Initializing diagnostic reading layer...</div>
+            <div id="mobile-loader-msg">Initializing layout modules...</div>
         </div>
         
         <!-- Desktop Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
     </div>
 
-    <script>
-        // FIXED: Universal fallbacks to extract the global library reference across all sandbox designs
-        const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+    <!-- CRITICAL FIX: Changed script execution block to type="module" to enable direct sandbox memory injections -->
+    <script type="module">
+        // Import PDF.js directly into isolated memory, bypassing Squarespace window filters entirely
+        import * as pdfjsModule from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs';
         
-        // Dynamically instantiate worker using inline Blobs to prevent worker assignment blocks
-        if (pdfjsLib) {
-            const workerBlob = new Blob(
-                [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js');`],
-                { type: 'application/javascript' }
-            );
-            pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(workerBlob);
-        }
+        // Map the imported reference module layers out
+        const pdfjsLib = pdfjsModule;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs';
 
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
@@ -254,15 +248,8 @@
         }
 
         async function renderMobilePdfCompilation(pdfUrl) {
-            console.log(`[Diagnostic Trace] Initializing layout compilation stream for endpoint URL: "${pdfUrl}"`);
+            console.log(`[Module Trace] Initializing download pipeline for: "${pdfUrl}"`);
             
-            // Double check that the library initialized cleanly
-            if (!pdfjsLib) {
-                console.error("[Diagnostic Trace] Critical Halt: pdfjsLib library is missing completely from window scope context.");
-                mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg" style="color:#cc0000; font-weight:bold;">Dependency Error:<br><span style="font-size:13px; color:#333;">PDF.js engine failed to bind to window scope inside Squarespace sandbox layers.</span></div>';
-                return;
-            }
-
             const assignmentToken = Symbol('renderToken');
             currentRenderTaskToken = assignmentToken;
 
@@ -275,18 +262,15 @@
                 });
                 
                 const pdf = await loadingTask.promise;
-                console.log(`[Diagnostic Trace] Binary fetch complete. Verified pages inside document: ${pdf.numPages}`);
+                console.log(`[Module Trace] Download verified. Found pages inside bundle: ${pdf.numPages}`);
                 
-                if (currentRenderTaskToken !== assignmentToken) {
-                    console.log("[Diagnostic Trace] Execution aborted safely: stale assignment token.");
-                    return;
-                }
+                if (currentRenderTaskToken !== assignmentToken) return;
                 mobilePdfDeck.innerHTML = ''; 
 
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     if (currentRenderTaskToken !== assignmentToken) return;
 
-                    console.log(`[Diagnostic Trace] Parsing page array track tier [${pageNum}/${pdf.numPages}]...`);
+                    console.log(`[Module Trace] Rasterizing page item frame: [${pageNum}/${pdf.numPages}]...`);
                     const page = await pdf.getPage(pageNum);
                     
                     const canvas = document.createElement('canvas');
@@ -305,11 +289,11 @@
                     };
                     
                     await page.render(renderContext).promise;
-                    console.log(`[Diagnostic Trace] Page track frame [${pageNum}] successfully rasterized.`);
                 }
+                console.log("[Module Trace] All page frame arrays compiled successfully.");
             } catch (err) {
-                console.error('[Diagnostic Trace CRITICAL CRASH]', err);
-                mobilePdfDeck.innerHTML = `<div id="mobile-loader-msg" style="color:#cc0000; font-weight:bold;">渲染错误 (Render Error):<br><span style="font-size:13px; font-family:monospace; color:#333;">${err.message || err}</span></div>`;
+                console.error('[Module Trace Critical Exception]', err);
+                mobilePdfDeck.innerHTML = `<div id="mobile-loader-msg" style="color:#cc0000; font-weight:bold;">模块处理错误 (Module Processing Error):<br><span style="font-size:13px; font-family:monospace; color:#333;">${err.message || err}</span></div>`;
             }
         }
 
@@ -387,11 +371,12 @@
                 }
 
             } catch (error) {
-                console.error('[Diagnostic Trace Manifest Fetch Failure]', error);
+                console.error('[Module Trace Manifest Fetch Failure]', error);
                 statusBar.innerText = 'Error loading unified tracking matrix database layers.';
             }
         }
 
+        // Add event listener safely inside our module script wrapper framework
         owDropdown.addEventListener('change', function(e) {
             const selectedKey = e.target.value;
             if (selectedKey && masterDatabase[selectedKey]) {
