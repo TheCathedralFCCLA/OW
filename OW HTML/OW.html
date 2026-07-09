@@ -116,7 +116,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -132,7 +131,6 @@
             </div>
         </div>
         
-        <!-- The Master Native Document Viewing Portal Slot -->
         <div id="ow-document-holder"></div>
     </div>
 
@@ -174,17 +172,17 @@
         }
 
         function getTargetDateKeyFromPath() {
-            // FIXED: Instantly prioritize the preserved 404 session storage string if it exists
-            var savedDate = sessionStorage.getItem('redirect_ow_date');
-            if (savedDate) {
-                sessionStorage.removeItem('redirect_ow_date'); // Clean up the token
-                return extractCleanDateKey(savedDate);
+            // FIXED: Instantly prioritize the hidden session token injected from your global header traffic cop script
+            var dynamicCopSlug = sessionStorage.getItem('squarespace_clean_ow_date');
+            if (dynamicCopSlug) {
+                sessionStorage.removeItem('squarespace_clean_ow_date'); // Evaporate token key after reading
+                return extractCleanDateKey(dynamicCopSlug);
             }
 
             let dateSlug = null;
-
+            const urlParams = new URLSearchParams(window.location.search);
+            
             if (window.location.protocol === 'file:') {
-                const urlParams = new URLSearchParams(window.location.search);
                 dateSlug = urlParams.get('date'); 
             } else {
                 const path = window.location.pathname;
@@ -246,7 +244,7 @@
                 </object>
             `;
 
-            // Keep clean aesthetic path syntax trailing options visible inside the browser address bar frame
+            // FIXED: Rewrites the browser URL to mimic a real clean subdirectory mask flawlessly!
             if (window.location.protocol !== 'file:') {
                 window.history.pushState(null, '', '/ows/' + dateKey);
             }
