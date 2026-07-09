@@ -3,7 +3,6 @@
 <head>
     <title>OW Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Inject PDF.js Core Engine Infrastructure via a stable, legacy-compatible production stream -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         html, body {
@@ -135,7 +134,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Top Layout Section -->
         <div id="top-bar">
             <h1>Order of Worship</h1>
             <div class="ow-selector-inline">
@@ -151,19 +149,19 @@
             </div>
         </div>
         
-        <!-- Mobile Custom Scrollable Canvas Container -->
         <div id="mobile-pdf-deck">
             <div id="mobile-loader-msg">Initializing digital reading layout...</div>
         </div>
         
-        <!-- Desktop Document Canvas Frame -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
     </div>
 
     <script>
-        // CRITICAL FIX: Force PDF.js to completely skip thread spawning and run execution directly on the main thread
-        const pdfjsLib = window['pdfjs-dist/build/pdf'];
-        pdfjsLib.GlobalWorkerOptions.workerSrc = ''; 
+        // FIXED: Safely isolate legacy tracking variables out of system layers before executing global configuration assignments
+        const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+        if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = ''; 
+        }
 
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
@@ -265,7 +263,6 @@
             mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg">Downloading multi-page layout document...</div>';
 
             try {
-                // Pass direct anonymous origin parameters to slice cleanly through custom security sandboxes
                 const loadingTask = pdfjsLib.getDocument({
                     url: pdfUrl,
                     withCredentials: false
@@ -285,7 +282,7 @@
                     mobilePdfDeck.appendChild(canvas);
 
                     const ctx = canvas.getContext('2d');
-                    const viewport = page.getViewport({ scale: 1.5 }); // Balanced scale factor for fast mobile rendering
+                    const viewport = page.getViewport({ scale: 1.5 }); 
                     
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
