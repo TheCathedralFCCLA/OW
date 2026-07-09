@@ -3,7 +3,7 @@
 <head>
     <title>OW Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Inject PDF.js Core Engine and Legacy Compatibility Infrastructure Layers -->
+    <!-- Inject PDF.js Core Engine Infrastructure -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         html, body {
@@ -90,7 +90,6 @@
             border-color: #990000;
         }
         
-        /* Custom Mobile Virtual PDF Render Canvas Deck */
         #mobile-pdf-deck {
             display: none;
             flex-direction: column;
@@ -162,8 +161,12 @@
     </div>
 
     <script>
-        // Setup worker pathway configuration properties for PDF.js engine instances
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        // FIXED: Convert cross-origin file worker paths to inline base string models to drop cross-domain sandbox limits
+        const workerBlob = new Blob(
+            [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js');`],
+            { type: 'application/javascript' }
+        );
+        pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(workerBlob);
 
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
@@ -182,7 +185,7 @@
         const owDropdown = document.getElementById('ow-dropdown');
 
         let masterDatabase = {};
-        let currentRenderTaskToken = null; // Token block to instantly drop stale renders if someone rapidly flips the dropdown
+        let currentRenderTaskToken = null;
 
         function normalizeDate(m, d, y) {
             let month = parseInt(m, 10);
@@ -258,34 +261,29 @@
             }
         }
 
-        // Custom Multi-Page Streaming Mobile Rendering Pipeline Engine
         async function renderMobilePdfCompilation(pdfUrl) {
             const assignmentToken = Symbol('renderToken');
             currentRenderTaskToken = assignmentToken;
 
-            // Flash loader screen layout clean
             mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg">Downloading multi-page layout document...</div>';
 
             try {
                 const loadingTask = pdfjsLib.getDocument(pdfUrl);
                 const pdf = await loadingTask.promise;
                 
-                if (currentRenderTaskToken !== assignmentToken) return; // Stale dropdown select drop rule
-                mobilePdfDeck.innerHTML = ''; // Wipe loader message cleanly once document structure stream array commits
+                if (currentRenderTaskToken !== assignmentToken) return;
+                mobilePdfDeck.innerHTML = ''; 
 
-                // Step sequentially through every single page found inside the document structure
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     if (currentRenderTaskToken !== assignmentToken) return;
 
                     const page = await pdf.getPage(pageNum);
                     
-                    // Create an individual canvas tile element per page track found
                     const canvas = document.createElement('canvas');
                     canvas.className = 'mobile-pdf-page-canvas';
                     mobilePdfDeck.appendChild(canvas);
 
                     const ctx = canvas.getContext('2d');
-                    // Render out sharp 2.0x display layout texture grids
                     const viewport = page.getViewport({ scale: 2.0 });
                     
                     canvas.height = viewport.height;
@@ -311,7 +309,6 @@
             statusBar.style.display = 'none';
             openNewTabBtn.href = fileData.url;
 
-            // Route execution paths symmetrically depending on layout window breakpoint profiles
             if (window.innerWidth <= 767) {
                 renderMobilePdfCompilation(fileData.url);
             } else {
