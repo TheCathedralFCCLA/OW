@@ -3,8 +3,8 @@
 <head>
     <title>OW Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Inject PDF.js Core Engine Infrastructure -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- Inject PDF.js Core Engine Infrastructure via a stable, legacy-compatible production stream -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         html, body {
             margin: 0;
@@ -161,12 +161,9 @@
     </div>
 
     <script>
-        // FIXED: Convert cross-origin file worker paths to inline base string models to drop cross-domain sandbox limits
-        const workerBlob = new Blob(
-            [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js');`],
-            { type: 'application/javascript' }
-        );
-        pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(workerBlob);
+        // CRITICAL FIX: Force PDF.js to completely skip thread spawning and run execution directly on the main thread
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        pdfjsLib.GlobalWorkerOptions.workerSrc = ''; 
 
         const USER = 'TheCathedralFCCLA';
         const REPO = 'OW';
@@ -249,7 +246,7 @@
             const targetKey = `20${pad(parts[2])}${pad(parts[0])}${pad(parts[1])}`;
 
             try {
-                const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
+                const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`, { mode: 'cors' });
                 const data = await response.json();
                 
                 if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
@@ -268,7 +265,11 @@
             mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg">Downloading multi-page layout document...</div>';
 
             try {
-                const loadingTask = pdfjsLib.getDocument(pdfUrl);
+                // Pass direct anonymous origin parameters to slice cleanly through custom security sandboxes
+                const loadingTask = pdfjsLib.getDocument({
+                    url: pdfUrl,
+                    withCredentials: false
+                });
                 const pdf = await loadingTask.promise;
                 
                 if (currentRenderTaskToken !== assignmentToken) return;
@@ -284,7 +285,7 @@
                     mobilePdfDeck.appendChild(canvas);
 
                     const ctx = canvas.getContext('2d');
-                    const viewport = page.getViewport({ scale: 2.0 });
+                    const viewport = page.getViewport({ scale: 1.5 }); // Balanced scale factor for fast mobile rendering
                     
                     canvas.height = viewport.height;
                     canvas.width = viewport.width;
@@ -329,7 +330,7 @@
             try {
                 if (window.location.protocol === 'file:') {
                     console.log("[Directory Engine] Local mode: query live API.");
-                    const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`);
+                    const response = await fetch(`${GITHUB_API_URL}${cacheBuster}`, { mode: 'cors' });
                     const apiData = await response.json();
                     if (Array.isArray(apiData)) {
                         apiData.forEach(item => {
@@ -347,7 +348,7 @@
                     }
                 } else {
                     console.log("[Directory Engine] Production mode: loading static database dictionary.");
-                    const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`);
+                    const response = await fetch(`${REPO_DOCS_JSON}${cacheBuster}`, { mode: 'cors' });
                     masterDatabase = await response.json();
                 }
 
