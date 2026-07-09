@@ -61,6 +61,7 @@
             gap: 8px;
             margin-top: 4px;
         }
+        /* FIXED: Both buttons now share this single, uniform clean style */
         .btn {
             display: inline-block;
             padding: 6px 14px;
@@ -73,22 +74,12 @@
             text-decoration: none;
             cursor: pointer;
             transition: all 0.15s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
         .btn:hover {
             background: #f5f5f5;
             border-color: #999;
-        }
-        /* FIXED: "Watch Service" button is now high-visibility white with subtle border definitions */
-        .btn-primary {
-            color: #111 !important;
-            background: #ffffff !important;
-            border: 1px solid #b5b5b5 !important;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        }
-        .btn-primary:hover {
-            background: #fdfdfd !important;
-            border-color: #888888 !important;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
         }
         
         #ow-document-holder {
@@ -137,7 +128,8 @@
             <div id="status-bar" style="display: none;">Loading document framework...</div>
             
             <div class="ow-actions-wrapper">
-                <a id="watch-service-btn" class="btn btn-primary" target="_blank" style="display: none;">Watch Service</a>
+                <!-- FIXED: Classes are identical for both buttons now -->
+                <a id="watch-service-btn" class="btn" target="_blank" style="display: none;">Watch Service</a>
                 <a id="open-new-tab-btn" class="btn" target="_blank">Open OW in New Tab</a>
             </div>
         </div>
