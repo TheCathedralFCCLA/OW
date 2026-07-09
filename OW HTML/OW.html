@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>OW Viewer</title>
+    <title>OW Diagnostics Viewer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Inject PDF.js Core Engine Infrastructure via a stable, legacy-compatible production stream -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <style>
         html, body {
@@ -89,53 +90,43 @@
             border-color: #990000;
         }
         
+        /* DIAGNOSTIC OVERRIDE: Set deck display visible on all screens */
         #mobile-pdf-deck {
-            display: none;
+            display: flex;
             flex-direction: column;
             align-items: center;
             width: 100%;
             background: #f9f9f9;
-            padding: 10px 0;
+            padding: 20px 0;
             box-sizing: border-box;
         }
         .mobile-pdf-page-canvas {
             width: 94% !important;
             height: auto !important;
-            max-width: 650px;
-            margin-bottom: 12px;
+            max-width: 800px; /* Slightly wider for desktop diagnostic visibility */
+            margin-bottom: 20px;
             background: #fff;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             border-radius: 4px;
         }
         #mobile-loader-msg {
-            font-size: 15px;
+            font-size: 16px;
             color: #666;
             padding: 40px 20px;
             text-align: center;
         }
 
+        /* DIAGNOSTIC OVERRIDE: Completely lock down iframe so it can't steal layout rendering */
         iframe {
-            width: 100%;
-            height: 900px;
-            border: none;
-            margin: 0;
-            padding: 0;
-        }
-        
-        @media (max-width: 767px) {
-            iframe {
-                display: none !important;
-            }
-            #mobile-pdf-deck {
-                display: flex !important;
-            }
+            display: none !important;
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Top Layout Section -->
         <div id="top-bar">
-            <h1>Order of Worship</h1>
+            <h1>Order of Worship <span style="font-size:12px; color:#cc0000; vertical-align:middle;">[Diagnostic Mode]</span></h1>
             <div class="ow-selector-inline">
                 <select id="ow-dropdown" class="ow-dropdown-style">
                     <option value="">Loading available editions...</option>
@@ -149,15 +140,17 @@
             </div>
         </div>
         
+        <!-- Custom Scrollable Canvas Container (Now active across all views) -->
         <div id="mobile-pdf-deck">
-            <div id="mobile-loader-msg">Initializing digital reading layout...</div>
+            <div id="mobile-loader-msg">Initializing diagnostic reading layer...</div>
         </div>
         
+        <!-- Desktop Document Canvas Frame (Permanently disabled during trace execution) -->
         <iframe id="ow-viewer" src="about:blank" allow="autoplay"></iframe>
     </div>
 
     <script>
-        // FIXED: Safely isolate legacy tracking variables out of system layers before executing global configuration assignments
+        // Force engine to completely skip worker assignment routing to isolate runtime behaviors
         const pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
         if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = ''; 
@@ -257,6 +250,7 @@
         }
 
         async function renderMobilePdfCompilation(pdfUrl) {
+            console.log(`[Diagnostic Trace] Initializing layout compilation stream for endpoint URL: "${pdfUrl}"`);
             const assignmentToken = Symbol('renderToken');
             currentRenderTaskToken = assignmentToken;
 
@@ -267,14 +261,20 @@
                     url: pdfUrl,
                     withCredentials: false
                 });
-                const pdf = await loadingTask.promise;
                 
-                if (currentRenderTaskToken !== assignmentToken) return;
+                const pdf = await loadingTask.promise;
+                console.log(`[Diagnostic Trace] Binary fetch complete. Verified pages inside document: ${pdf.numPages}`);
+                
+                if (currentRenderTaskToken !== assignmentToken) {
+                    console.log("[Diagnostic Trace] Execution aborted safely: stale assignment token.");
+                    return;
+                }
                 mobilePdfDeck.innerHTML = ''; 
 
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     if (currentRenderTaskToken !== assignmentToken) return;
 
+                    console.log(`[Diagnostic Trace] Parsing page array track tier [${pageNum}/${pdf.numPages}]...`);
                     const page = await pdf.getPage(pageNum);
                     
                     const canvas = document.createElement('canvas');
@@ -293,10 +293,11 @@
                     };
                     
                     await page.render(renderContext).promise;
+                    console.log(`[Diagnostic Trace] Page track frame [${pageNum}] successfully rasterized to active browser viewport view canvas block.`);
                 }
             } catch (err) {
-                console.error('[Mobile PDF Engine] Crash compiling canvas layouts:', err);
-                mobilePdfDeck.innerHTML = '<div id="mobile-loader-msg" style="color:#cc0000;">Unable to render document inline. Please use the "Open OW" button above.</div>';
+                console.error('[Diagnostic Trace CRITICAL CRASH]', err);
+                mobilePdfDeck.innerHTML = `<div id="mobile-loader-msg" style="color:#cc0000; font-weight:bold;">渲染错误 (Render Error):<br><span style="font-size:13px; font-family:monospace; color:#333;">${err.message || err}</span></div>`;
             }
         }
 
@@ -307,11 +308,8 @@
             statusBar.style.display = 'none';
             openNewTabBtn.href = fileData.url;
 
-            if (window.innerWidth <= 767) {
-                renderMobilePdfCompilation(fileData.url);
-            } else {
-                viewerFrame.src = fileData.url + '#view=Fit';
-            }
+            // Diagnostic Override: Explicitly force canvas layout builder on all viewpoint dimensions
+            renderMobilePdfCompilation(fileData.url);
 
             if (window.location.protocol !== 'file:') {
                 window.history.pushState(null, '', '/ows/' + dateKey);
@@ -378,8 +376,8 @@
                 }
 
             } catch (error) {
+                console.error('[Diagnostic Trace Manifest Fetch Failure]', error);
                 statusBar.innerText = 'Error loading unified tracking matrix database layers.';
-                console.error(error);
             }
         }
 
