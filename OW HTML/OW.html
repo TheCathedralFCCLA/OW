@@ -88,23 +88,36 @@
             border-color: #990000;
         }
         
-        /* Unified, bulletproof document layout engine container slot */
+        /* FIXED: Unified responsive deck that centers the document on all screen types */
         #ow-document-holder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             width: 100%;
-            height: 900px;
+            height: 950px;
             margin: 0;
-            padding: 0;
+            padding: 16px 0;
+            box-sizing: border-box;
             background: #f9f9f9;
         }
         .native-pdf-object {
-            width: 100%;
+            width: 94% !important; /* Unified padding frame width rules */
+            max-width: 900px;      /* Restricts massive sizing blowouts on desktop displays */
             height: 100%;
             border: none;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border-radius: 6px;
         }
         
         @media (max-width: 767px) {
             #ow-document-holder {
-                height: 700px; /* Responsive viewing dimension layout for small screens */
+                height: 720px; 
+                padding: 10px 0;
+            }
+            .native-pdf-object {
+                width: 95% !important;
+                border-radius: 4px;
             }
         }
     </style>
@@ -229,7 +242,6 @@
             statusBar.style.display = 'none';
             openNewTabBtn.href = fileData.url;
 
-            // FIXED: Reconstructs a clean, standard object layout wrapper dynamically to trigger smooth scrolling multi-page actions across iOS and Android natively
             const fileTargetLink = fileData.url + '#view=Fit&pagemode=none';
             documentHolder.innerHTML = `
                 <object class="native-pdf-object" data="${fileTargetLink}" type="application/pdf">
