@@ -35,7 +35,7 @@ jobs:
               "key": "\(.m)-\(.d)-\(.y)",
               "value": {
                 "filename": "\(.m).\(.d).\(.y)\(.tail)",
-                "url": "https://TheCathedralFCCLA.github.io/OW/OWs/\(.m).\(.d).\(.y)\(.tail | @uri)",
+                "url": "https://cju-media.github.io/OW/OWs/\(.m).\(.d).\(.y)\(.tail | @uri)",
                 "display_date": "\(.m)/\(.d)/\(.y)"
               }
             }
