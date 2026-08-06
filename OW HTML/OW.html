@@ -159,16 +159,89 @@
             return `${month}-${day}-${year}`;
         }
 
-        function extractCleanDateKey(filename) {
+        async function fetchCreationYearFromApi(filename) {
+            try {
+                // Fetch commits for this specific file to get its original creation year.
+                // Since this runs client-side, we must query the API.
+                const fileApiUrl = `https://api.github.com/repos/${USER}/${REPO}/commits?path=${SUBFOLDER}/${encodeURIComponent(filename)}&per_page=1`;
+                const response = await fetch(fileApiUrl);
+                const commits = await response.json();
+                if (Array.isArray(commits) && commits.length > 0) {
+                    // Get the last commit in the array which corresponds to creation
+                    // (Actually the API returns newest first, but if it's backlogged it's uploaded on a specific date)
+                    // If we want creation, we'd need to paginate to the end or just use the earliest available.
+                    // For simplicity, we just use the commit date of the oldest commit we can easily fetch,
+                    // or since we are just trying to find *a* year, let's just get the first one.
+                    const commitDateStr = commits[commits.length - 1].commit.author.date;
+                    if (commitDateStr) {
+                        return new Date(commitDateStr).getFullYear() % 100;
+                    }
+                }
+            } catch (e) {
+                console.warn('[Directory Engine] Could not fetch creation date for', filename, e);
+            }
+            return new Date().getFullYear() % 100;
+        }
+
+        function parseDateInfo(filename) {
             if (!filename) return null;
             if (filename.includes('/')) {
                 filename = filename.substring(filename.lastIndexOf('/') + 1);
             }
+
+            // Standard format
             const match = filename.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
             if (match) {
-                return normalizeDate(match[1], match[2], match[3]);
+                let month = parseInt(match[1], 10);
+                let day = parseInt(match[2], 10);
+                let year = parseInt(match[3], 10);
+                if (year > 1000) year = year % 100;
+                let k = `${month}-${day}-${year}`;
+                return { key: k, display_date: `${month}/${day}/${year}` };
             }
+
+            // XMAS format
+            filename = decodeURIComponent(filename); // In case it has %20
+            const xmasMatch = filename.match(/xmas/i);
+            if (xmasMatch) {
+                let yearStrMatch = filename.match(/\b(20\d{2})\b/);
+                let year = null;
+                if (yearStrMatch) {
+                    year = parseInt(yearStrMatch[1], 10) % 100;
+                }
+
+                let month = 12;
+                let day = 24;
+
+                let timeMatch = filename.match(/(\d{1,2})\s*(am|pm)/i);
+                let timeStr = "";
+                let displayTime = "";
+                if (timeMatch) {
+                    let hour = parseInt(timeMatch[1], 10);
+                    let isPm = timeMatch[2].toLowerCase() === 'pm';
+                    if (isPm && hour < 12) hour += 12;
+                    if (!isPm && hour === 12) hour = 0;
+
+                    let hourStr = hour.toString().padStart(2, '0');
+                    timeStr = `-${hourStr}00`;
+                    displayTime = ` ${timeMatch[1]}${timeMatch[2].toLowerCase()}`;
+                }
+
+                return { keyBase: `${month}-${day}-`, timeStr, displayTime, needsYear: year === null, year, originalFilename: filename };
+            }
+
             return null;
+        }
+
+        function extractCleanDateKey(filename) {
+            const info = parseDateInfo(filename);
+            if (!info) return null;
+            if (info.key) return info.key;
+
+            // For synchronous extraction when year isn't in name, we fall back to current year.
+            // When building the menu, we handle this asynchronously with fetchCreationYearFromApi
+            let year = info.year !== null ? info.year : (new Date().getFullYear() % 100);
+            return `${info.keyBase}${year}${info.timeStr}`;
         }
 
         function getTargetDateKeyFromPath() {
@@ -203,9 +276,12 @@
             keys.sort((a, b) => {
                 const pA = a.split('-').map(Number);
                 const pB = b.split('-').map(Number);
-                if (pA[2] !== pB[2]) return pB[2] - pA[2];
-                if (pA[0] !== pB[0]) return pB[0] - pA[0];
-                return pB[1] - pA[1];
+                if (pA[2] !== pB[2]) return pB[2] - pA[2]; // year
+                if (pA[0] !== pB[0]) return pB[0] - pA[0]; // month
+                if (pA[1] !== pB[1]) return pB[1] - pA[1]; // day
+                const tA = pA[3] || 0;
+                const tB = pB[3] || 0;
+                return tB - tA; // time
             });
         }
 
@@ -213,16 +289,63 @@
             watchBtn.style.display = 'none'; 
             if (!dateKey) return;
 
-            const parts = dateKey.split('-').map(Number);
+            const parts = dateKey.split('-');
+            const year = parseInt(parts[2], 10);
+            const month = parseInt(parts[0], 10);
+            const day = parseInt(parts[1], 10);
+            const timePart = parts.length > 3 ? parseInt(parts[3], 10) : null;
+
             const pad = (num) => String(num).padStart(2, '0');
-            const targetKey = `20${pad(parts[2])}${pad(parts[0])}${pad(parts[1])}`;
+            const targetKey = `20${pad(year)}${pad(month)}${pad(day)}`;
 
             try {
                 const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
                 
                 if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
-                    watchBtn.href = data[targetKey][0];
+                    let bestVideoUrl = data[targetKey][0]; // Default to the first one
+
+                    if (data[targetKey].length > 1 && timePart !== null) {
+                        // Find the closest matching time by parsing YouTube OEmbed
+                        let closestTimeDiff = Infinity;
+
+                        const owHour = Math.floor(timePart / 100);
+                        const owMinute = timePart % 100;
+                        const owTimeInMinutes = owHour * 60 + owMinute;
+
+                        for (const url of data[targetKey]) {
+                            try {
+                                const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+                                if (!oembedResponse.ok) continue;
+                                const oembedData = await oembedResponse.json();
+
+                                const title = oembedData.title || "";
+                                // Regex to find time, e.g., "11:00 PM", "8:00pm", "5:00 PM", or "8pm"
+                                const timeMatch = title.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+
+                                if (timeMatch) {
+                                    let h = parseInt(timeMatch[1], 10);
+                                    const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+                                    const isPm = timeMatch[3].toLowerCase() === 'pm';
+
+                                    if (isPm && h < 12) h += 12;
+                                    if (!isPm && h === 12) h = 0;
+
+                                    const ytTimeInMinutes = h * 60 + m;
+                                    const diff = Math.abs(ytTimeInMinutes - owTimeInMinutes);
+
+                                    if (diff < closestTimeDiff) {
+                                        closestTimeDiff = diff;
+                                        bestVideoUrl = url;
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('[YT Engine] Error parsing oembed for:', url, e);
+                            }
+                        }
+                    }
+
+                    watchBtn.href = bestVideoUrl;
                     watchBtn.style.display = 'inline-block';
                 }
             } catch (err) {
@@ -264,16 +387,45 @@
                     if (Array.isArray(apiData)) {
                         apiData.forEach(item => {
                             const name = item.name;
-                            const match = name.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
-                            if (match && name.toLowerCase().endsWith('.pdf')) {
-                                const k = normalizeDate(match[1], match[2], match[3]);
-                                masterDatabase[k] = {
-                                    filename: name,
-                                    url: `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${encodeURIComponent(name)}`,
-                                    display_date: k.replace(/-/g, '/')
-                                };
+                            if (name.toLowerCase().endsWith('.pdf')) {
+                                const info = parseDateInfo(name);
+                                if (info) {
+                                    if (info.key) {
+                                        masterDatabase[info.key] = {
+                                            filename: name,
+                                            url: `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${encodeURIComponent(name)}`,
+                                            display_date: info.display_date
+                                        };
+                                    } else {
+                                        // Wait to process this later asynchronously
+                                        masterDatabase[`_pending_${name}`] = info;
+                                    }
+                                }
                             }
                         });
+
+                        // Process pending requests asynchronously via API
+                        const pendingKeys = Object.keys(masterDatabase).filter(k => k.startsWith('_pending_'));
+                        for (const pk of pendingKeys) {
+                            const info = masterDatabase[pk];
+                            delete masterDatabase[pk];
+
+                            let year = info.year;
+                            if (info.needsYear) {
+                                year = await fetchCreationYearFromApi(info.originalFilename);
+                            }
+                            const key = `${info.keyBase}${year}${info.timeStr}`;
+                            // The display date format is MM/DD/YY Time
+                            const month = parseInt(info.keyBase.split('-')[0], 10);
+                            const day = parseInt(info.keyBase.split('-')[1], 10);
+                            const displayDate = `${month}/${day}/${year}${info.displayTime}`;
+
+                            masterDatabase[key] = {
+                                filename: info.originalFilename,
+                                url: `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${encodeURIComponent(info.originalFilename)}`,
+                                display_date: displayDate
+                            };
+                        }
                     }
                 } else {
                     console.log("[Directory Engine] Production mode: loading static database dictionary.");
@@ -286,7 +438,68 @@
 
                 if (sortedKeys.length > 0) {
                     owDropdown.innerHTML = '';
+
+                    // Group keys by day and find the active key for that day if there are multiple services
+                    const now = new Date();
+                    const visibleKeys = [];
+                    const groupedByDay = {};
+
                     sortedKeys.forEach(key => {
+                        const p = key.split('-');
+                        const dayKey = `${p[0]}-${p[1]}-${p[2]}`;
+                        if (!groupedByDay[dayKey]) groupedByDay[dayKey] = [];
+                        groupedByDay[dayKey].push(key);
+                    });
+
+                    for (const [dayKey, keysForDay] of Object.entries(groupedByDay)) {
+                        if (keysForDay.length === 1) {
+                            visibleKeys.push(keysForDay[0]);
+                        } else {
+                            // Multiple services on the same day (e.g. XMAS).
+                            // Sort keysForDay chronologically (newest to oldest time)
+                            // We want to find the "active" service, which is the most recent one that hasn't ended.
+                            // A service ends 2 hours after start (current time < start time + 3 hours as specified)
+                            const p = dayKey.split('-');
+                            let month = parseInt(p[0], 10);
+                            let day = parseInt(p[1], 10);
+                            let year = parseInt(p[2], 10) + 2000;
+
+                            let activeKeyForDay = keysForDay[keysForDay.length - 1]; // Default to earliest service
+
+                            // Iterate from oldest to newest (reverse of keysForDay since keysForDay is newest to oldest)
+                            for (let i = keysForDay.length - 1; i >= 0; i--) {
+                                const key = keysForDay[i];
+                                const t = parseInt(key.split('-')[3] || '0', 10);
+                                const hour = Math.floor(t / 100);
+                                const minute = t % 100;
+
+                                const serviceTime = new Date(year, month - 1, day, hour, minute);
+                                // The threshold is 3 hours after start (e.g. 2 hours after a 1 hour service ends)
+                                const cutoffTime = new Date(serviceTime.getTime() + 3 * 60 * 60 * 1000);
+
+                                if (now < cutoffTime) {
+                                    activeKeyForDay = key;
+                                    break;
+                                } else {
+                                    activeKeyForDay = key; // If all have passed, it will end up being the latest one (newest)
+                                }
+                            }
+
+                            // Only add services up to the active one (hide future ones)
+                            keysForDay.forEach(key => {
+                                const t1 = parseInt(key.split('-')[3] || '0', 10);
+                                const tActive = parseInt(activeKeyForDay.split('-')[3] || '0', 10);
+                                if (t1 <= tActive) {
+                                    visibleKeys.push(key);
+                                }
+                            });
+                        }
+                    }
+
+                    // Re-sort visible keys
+                    sortKeysChronologically(visibleKeys);
+
+                    visibleKeys.forEach(key => {
                         const option = document.createElement('option');
                         option.value = key; 
                         option.innerText = masterDatabase[key].display_date;
@@ -296,7 +509,15 @@
                     if (pathTargetKey && masterDatabase[pathTargetKey]) {
                         activeKey = pathTargetKey;
                     } else {
-                        activeKey = sortedKeys[0];
+                        activeKey = visibleKeys[0];
+                    }
+
+                    // Check if path target key was hidden (e.g., requested a future service but it was hidden)
+                    if (!visibleKeys.includes(activeKey) && masterDatabase[activeKey]) {
+                        const option = document.createElement('option');
+                        option.value = activeKey;
+                        option.innerText = masterDatabase[activeKey].display_date;
+                        owDropdown.appendChild(option); // Add it back if specifically requested
                     }
 
                     owDropdown.value = activeKey;
