@@ -79,23 +79,85 @@
             return null; 
         }
 
-        function sortFilesChronologically(pdfFiles) {
-            pdfFiles.sort((a, b) => {
-                const parseDateParts = (name) => {
-                    const parts = name.split(' ')[0].split('.');
-                    return {
-                        month: parseInt(parts[0], 10) || 0,
-                        day: parseInt(parts[1], 10) || 0,
-                        year: parseInt(parts[2], 10) || 0
-                    };
-                };
-                const dateA = parseDateParts(a.name);
-                const dateB = parseDateParts(b.name);
+        async function fetchCreationYearFromApi(filename) {
+            try {
+                const fileApiUrl = `https://api.github.com/repos/${USER}/${REPO}/commits?path=${SUBFOLDER}/${encodeURIComponent(filename)}&per_page=1`;
+                const response = await fetch(fileApiUrl);
+                const commits = await response.json();
+                if (Array.isArray(commits) && commits.length > 0) {
+                    const commitDateStr = commits[commits.length - 1].commit.author.date;
+                    if (commitDateStr) {
+                        return new Date(commitDateStr).getFullYear() % 100;
+                    }
+                }
+            } catch (e) {
+                console.warn('[Directory Engine] Could not fetch creation date for', filename, e);
+            }
+            return new Date().getFullYear() % 100;
+        }
 
-                if (dateA.year !== dateB.year) return dateB.year - dateA.year;
-                if (dateA.month !== dateB.month) return dateB.month - dateA.month;
-                return dateB.day - dateA.day;
+        async function sortFilesChronologically(pdfFiles) {
+            const parsedFiles = await Promise.all(pdfFiles.map(async (file) => {
+                const name = file.name;
+                // Check for standard format
+                const match = name.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
+                if (match) {
+                    return {
+                        file,
+                        month: parseInt(match[1], 10) || 0,
+                        day: parseInt(match[2], 10) || 0,
+                        year: parseInt(match[3], 10) % 100 || 0,
+                        time: 0
+                    };
+                }
+
+                // Check for XMAS format
+                let decodedName = decodeURIComponent(name);
+                const xmasMatch = decodedName.match(/xmas/i);
+                if (xmasMatch) {
+                    let yearStrMatch = decodedName.match(/\b(20\d{2})\b/);
+                    let year = null;
+                    if (yearStrMatch) {
+                        year = parseInt(yearStrMatch[1], 10) % 100;
+                    }
+
+                    let timeMatch = decodedName.match(/(\d{1,2})\s*(am|pm)/i);
+                    let time = 0;
+                    if (timeMatch) {
+                        let hour = parseInt(timeMatch[1], 10);
+                        let isPm = timeMatch[2].toLowerCase() === 'pm';
+                        if (isPm && hour < 12) hour += 12;
+                        if (!isPm && hour === 12) hour = 0;
+                        time = hour * 100;
+                    }
+
+                    if (year === null) {
+                        year = await fetchCreationYearFromApi(name);
+                    }
+
+                    return {
+                        file,
+                        month: 12,
+                        day: 24,
+                        year: year,
+                        time: time
+                    };
+                }
+
+                return { file, month: 0, day: 0, year: 0, time: 0 };
+            }));
+
+            parsedFiles.sort((a, b) => {
+                if (a.year !== b.year) return b.year - a.year;
+                if (a.month !== b.month) return b.month - a.month;
+                if (a.day !== b.day) return b.day - a.day;
+                return b.time - a.time;
             });
+
+            // Re-order the original array based on the sorted wrapper objects
+            for(let i = 0; i < parsedFiles.length; i++) {
+                pdfFiles[i] = parsedFiles[i].file;
+            }
         }
 
         async function loadViewer() {
@@ -132,7 +194,7 @@
                     const rootPdfs = rootFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
 
                     if (rootPdfs.length > 0) {
-                        sortFilesChronologically(rootPdfs);
+                        await sortFilesChronologically(rootPdfs);
                         statusBar.style.display = 'none';
                         viewerFrame.src = `https://${USER}.github.io/${REPO}/${rootPdfs[0].name}`;
                         return;
@@ -146,7 +208,7 @@
                 if (Array.isArray(backupFiles)) {
                     const backupPdfs = backupFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
                     if (backupPdfs.length > 0) {
-                        sortFilesChronologically(backupPdfs);
+                        await sortFilesChronologically(backupPdfs);
                         statusBar.style.display = 'none';
                         viewerFrame.src = `https://${USER}.github.io/${REPO}/${SUBFOLDER}/${backupPdfs[0].name}`;
                         return;
