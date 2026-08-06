@@ -99,20 +99,31 @@
         async function sortFilesChronologically(pdfFiles) {
             const parsedFiles = await Promise.all(pdfFiles.map(async (file) => {
                 const name = file.name;
+                let decodedName = decodeURIComponent(name);
+
                 // Check for standard format
-                const match = name.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
+                const match = decodedName.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
                 if (match) {
+                    let timeMatch = decodedName.match(/(\d{1,2})\s*(am|pm)/i);
+                    let time = 0;
+                    if (timeMatch) {
+                        let hour = parseInt(timeMatch[1], 10);
+                        let isPm = timeMatch[2].toLowerCase() === 'pm';
+                        if (isPm && hour < 12) hour += 12;
+                        if (!isPm && hour === 12) hour = 0;
+                        time = hour * 100;
+                    }
+
                     return {
                         file,
                         month: parseInt(match[1], 10) || 0,
                         day: parseInt(match[2], 10) || 0,
                         year: parseInt(match[3], 10) % 100 || 0,
-                        time: 0
+                        time: time
                     };
                 }
 
                 // Check for XMAS format
-                let decodedName = decodeURIComponent(name);
                 const xmasMatch = decodedName.match(/xmas/i);
                 if (xmasMatch) {
                     let yearStrMatch = decodedName.match(/\b(20\d{2})\b/);

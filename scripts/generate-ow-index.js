@@ -11,9 +11,24 @@ function parseDateFromName(filename, filepath) {
         let day = parseInt(match[2], 10);
         let year = parseInt(match[3], 10);
         if (year > 1000) year = year % 100;
+
+        let timeMatch = filename.match(/(\d{1,2})\s*(am|pm)/i);
+        let timeStr = "";
+        let displayTime = "";
+        if (timeMatch) {
+            let hour = parseInt(timeMatch[1], 10);
+            let isPm = timeMatch[2].toLowerCase() === 'pm';
+            if (isPm && hour < 12) hour += 12;
+            if (!isPm && hour === 12) hour = 0;
+
+            let hourStr = hour.toString().padStart(2, '0');
+            timeStr = `-${hourStr}00`;
+            displayTime = ` ${timeMatch[1]}${timeMatch[2].toLowerCase()}`;
+        }
+
         return {
-            key: `${month}-${day}-${year}`,
-            display_date: `${month}/${day}/${year}`,
+            key: `${month}-${day}-${year}${timeStr}`,
+            display_date: `${month}/${day}/${year}${displayTime}`,
             is_xmas: false
         };
     }

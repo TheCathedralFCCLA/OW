@@ -189,6 +189,9 @@
                 filename = filename.substring(filename.lastIndexOf('/') + 1);
             }
 
+            // Decode to handle %20
+            filename = decodeURIComponent(filename);
+
             // Standard format
             const match = filename.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{2,4})/);
             if (match) {
@@ -196,12 +199,26 @@
                 let day = parseInt(match[2], 10);
                 let year = parseInt(match[3], 10);
                 if (year > 1000) year = year % 100;
-                let k = `${month}-${day}-${year}`;
-                return { key: k, display_date: `${month}/${day}/${year}` };
+
+                let timeMatch = filename.match(/(\d{1,2})\s*(am|pm)/i);
+                let timeStr = "";
+                let displayTime = "";
+                if (timeMatch) {
+                    let hour = parseInt(timeMatch[1], 10);
+                    let isPm = timeMatch[2].toLowerCase() === 'pm';
+                    if (isPm && hour < 12) hour += 12;
+                    if (!isPm && hour === 12) hour = 0;
+
+                    let hourStr = hour.toString().padStart(2, '0');
+                    timeStr = `-${hourStr}00`;
+                    displayTime = ` ${timeMatch[1]}${timeMatch[2].toLowerCase()}`;
+                }
+
+                let k = `${month}-${day}-${year}${timeStr}`;
+                return { key: k, display_date: `${month}/${day}/${year}${displayTime}` };
             }
 
             // XMAS format
-            filename = decodeURIComponent(filename); // In case it has %20
             const xmasMatch = filename.match(/xmas/i);
             if (xmasMatch) {
                 let yearStrMatch = filename.match(/\b(20\d{2})\b/);
