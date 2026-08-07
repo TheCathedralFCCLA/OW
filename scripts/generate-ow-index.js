@@ -88,6 +88,7 @@ function generateIndex() {
 
     let index = {};
     let files = fs.readdirSync(OWsDir);
+    let groupedFiles = {};
 
     for (let filename of files) {
         if (!filename.toLowerCase().endsWith('.pdf')) continue;
@@ -96,12 +97,64 @@ function generateIndex() {
         let parsed = parseDateFromName(filename, filepath);
 
         if (parsed) {
-            index[parsed.key] = {
+            if (!groupedFiles[parsed.key]) {
+                groupedFiles[parsed.key] = [];
+            }
+            groupedFiles[parsed.key].push({
                 filename: filename,
-                url: `https://cju-media.github.io/OW/OWs/${encodeURIComponent(filename)}`,
-                display_date: parsed.display_date
-            };
+                filepath: filepath,
+                parsed: parsed
+            });
         }
+    }
+
+    for (let key in groupedFiles) {
+        let group = groupedFiles[key];
+
+        if (group.length > 1) {
+            group.forEach(item => {
+                item.timestamp = 0;
+                try {
+                    const { execSync } = require('child_process');
+                    let output = execSync(`git log -1 --format=%ct -- "${item.filepath}"`, { encoding: 'utf8', stdio: 'pipe' }).trim();
+                    if (output) {
+                        item.timestamp = parseInt(output, 10) * 1000;
+                    }
+                } catch (e) {}
+
+                // If git log fails (e.g. shallow clone for older files), we leave timestamp as 0
+                // so newly added files will correctly beat older files.
+
+                item.score = item.timestamp;
+
+                // Huge bonus for final, huge penalty for draft, making it primary sort criteria essentially
+                const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+                let nameLower = item.filename.toLowerCase();
+                if (nameLower.includes('final')) {
+                    item.score += ONE_YEAR_MS;
+                } else if (nameLower.includes('draft')) {
+                    item.score -= ONE_YEAR_MS;
+                }
+            });
+
+            group.sort((a, b) => b.score - a.score);
+
+            for (let i = 1; i < group.length; i++) {
+                console.log(`Deleting older duplicate OW: ${group[i].filename}`);
+                try {
+                    fs.unlinkSync(group[i].filepath);
+                } catch (e) {
+                    console.error(`Failed to delete ${group[i].filepath}:`, e);
+                }
+            }
+        }
+
+        let winner = group[0];
+        index[key] = {
+            filename: winner.filename,
+            url: `https://cju-media.github.io/OW/OWs/${encodeURIComponent(winner.filename)}`,
+            display_date: winner.parsed.display_date
+        };
     }
 
     let outputPath = path.join(OWsDir, 'index.json');
