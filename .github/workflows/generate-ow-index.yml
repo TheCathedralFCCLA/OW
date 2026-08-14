@@ -28,12 +28,37 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        
+
         git add -A OWs/
-        
+
         if git diff --staged --quiet; then
           echo "No layout modifications or new asset paths detected. Skipping sync."
         else
           git commit -m "chore: automated directory matrix update [skip ci]"
-          git push origin main
+
+          # Multiple uploads in quick succession trigger overlapping runs of this
+          # workflow. If another run pushed to main first, our push below gets
+          # rejected as non-fast-forward. Instead of failing outright, drop our
+          # commit, sync to the new tip, re-scan the (now up to date) OWs/
+          # directory, and try again -- up to a few times.
+          attempt=1
+          max_attempts=5
+          until git push origin main; do
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "Failed to push after $attempt attempts."
+              exit 1
+            fi
+            echo "Push rejected (attempt $attempt/$max_attempts) -- another run updated main first. Re-syncing and retrying..."
+            git fetch origin main
+            git reset --hard origin/main
+            node scripts/generate-ow-index.js
+            git add -A OWs/
+            if git diff --staged --quiet; then
+              echo "No layout modifications or new asset paths detected after re-sync. Skipping sync."
+              break
+            fi
+            git commit -m "chore: automated directory matrix update [skip ci]"
+            attempt=$((attempt + 1))
+            sleep $((RANDOM % 5 + 1))
+          done
         fi
