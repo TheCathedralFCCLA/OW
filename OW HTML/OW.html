@@ -302,8 +302,32 @@
             });
         }
 
+        // Each playlist_streams.json entry is either a bare URL string
+        // (older data, or a video we never got timing metadata for) or a
+        // {"url", "start_ts"} object (epoch seconds the stream actually
+        // went live). Normalizes to the latter shape uniformly so the code
+        // below never has to care which one it got.
+        function normalizeStreamEntry(entry) {
+            if (typeof entry === 'string') return { url: entry, start_ts: null };
+            return { url: entry.url, start_ts: entry.start_ts || null };
+        }
+
+        // Converts a stream's start_ts to minutes-since-midnight in the
+        // service's home timezone, directly comparable to an OW's own
+        // time-of-day (owHour/owMinute below).
+        function startTsToLocalMinutes(start_ts) {
+            if (!start_ts) return null;
+            const d = new Date(start_ts * 1000);
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit'
+            }).formatToParts(d);
+            const hour = parseInt(parts.find(p => p.type === 'hour').value, 10);
+            const minute = parseInt(parts.find(p => p.type === 'minute').value, 10);
+            return hour * 60 + minute;
+        }
+
         async function matchYoutubeVideo(dateKey) {
-            watchBtn.style.display = 'none'; 
+            watchBtn.style.display = 'none';
             if (!dateKey) return;
 
             const parts = dateKey.split('-');
@@ -318,53 +342,68 @@
             try {
                 const response = await fetch(`${YT_JSON_URL}?cb=${new Date().getTime()}`);
                 const data = await response.json();
-                
-                if (data && data[targetKey] && Array.isArray(data[targetKey]) && data[targetKey].length > 0) {
-                    let bestVideoUrl = data[targetKey][0]; // Default to the first one
 
-                    if (data[targetKey].length > 1 && timePart !== null) {
-                        // Find the closest matching time by parsing YouTube OEmbed
-                        let closestTimeDiff = Infinity;
+                const rawEntries = data && Array.isArray(data[targetKey]) ? data[targetKey] : null;
+                if (!rawEntries || rawEntries.length === 0) return;
 
-                        const owHour = Math.floor(timePart / 100);
-                        const owMinute = timePart % 100;
-                        const owTimeInMinutes = owHour * 60 + owMinute;
+                const entries = rawEntries.map(normalizeStreamEntry);
+                let bestVideoUrl = entries[0].url; // Default to the first one
 
-                        for (const url of data[targetKey]) {
-                            try {
-                                const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-                                if (!oembedResponse.ok) continue;
-                                const oembedData = await oembedResponse.json();
+                if (entries.length > 1 && timePart !== null) {
+                    let closestTimeDiff = Infinity;
 
-                                const title = oembedData.title || "";
-                                // Regex to find time, e.g., "11:00 PM", "8:00pm", "5:00 PM", or "8pm"
-                                const timeMatch = title.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+                    const owHour = Math.floor(timePart / 100);
+                    const owMinute = timePart % 100;
+                    const owTimeInMinutes = owHour * 60 + owMinute;
 
-                                if (timeMatch) {
-                                    let h = parseInt(timeMatch[1], 10);
-                                    const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
-                                    const isPm = timeMatch[3].toLowerCase() === 'pm';
-
-                                    if (isPm && h < 12) h += 12;
-                                    if (!isPm && h === 12) h = 0;
-
-                                    const ytTimeInMinutes = h * 60 + m;
-                                    const diff = Math.abs(ytTimeInMinutes - owTimeInMinutes);
-
-                                    if (diff < closestTimeDiff) {
-                                        closestTimeDiff = diff;
-                                        bestVideoUrl = url;
-                                    }
-                                }
-                            } catch (e) {
-                                console.warn('[YT Engine] Error parsing oembed for:', url, e);
+                    for (const entry of entries) {
+                        // Fast path: we already know exactly when this
+                        // stream went live -- no network call needed.
+                        const localMinutes = startTsToLocalMinutes(entry.start_ts);
+                        if (localMinutes !== null) {
+                            const diff = Math.abs(localMinutes - owTimeInMinutes);
+                            if (diff < closestTimeDiff) {
+                                closestTimeDiff = diff;
+                                bestVideoUrl = entry.url;
                             }
+                            continue;
+                        }
+
+                        // Fallback for entries with no timing metadata yet:
+                        // parse a time out of the video's oEmbed title.
+                        try {
+                            const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(entry.url)}&format=json`);
+                            if (!oembedResponse.ok) continue;
+                            const oembedData = await oembedResponse.json();
+
+                            const title = oembedData.title || "";
+                            // Regex to find time, e.g., "11:00 PM", "8:00pm", "5:00 PM", or "8pm"
+                            const timeMatch = title.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i);
+
+                            if (timeMatch) {
+                                let h = parseInt(timeMatch[1], 10);
+                                const m = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+                                const isPm = timeMatch[3].toLowerCase() === 'pm';
+
+                                if (isPm && h < 12) h += 12;
+                                if (!isPm && h === 12) h = 0;
+
+                                const ytTimeInMinutes = h * 60 + m;
+                                const diff = Math.abs(ytTimeInMinutes - owTimeInMinutes);
+
+                                if (diff < closestTimeDiff) {
+                                    closestTimeDiff = diff;
+                                    bestVideoUrl = entry.url;
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[YT Engine] Error parsing oembed for:', entry.url, e);
                         }
                     }
-
-                    watchBtn.href = bestVideoUrl;
-                    watchBtn.style.display = 'inline-block';
                 }
+
+                watchBtn.href = bestVideoUrl;
+                watchBtn.style.display = 'inline-block';
             } catch (err) {
                 console.warn('[YT Engine] Connection error loading tracking matrix metadata:', err);
             }
